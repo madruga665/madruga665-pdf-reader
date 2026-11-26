@@ -84,6 +84,7 @@ specs/006-ci-github-actions/
 - **Fato observado no `action.yml` do `setup-gradle@v6.4.1`**: o padrão de `cache-read-only` é `${{ github.event.repository != null && github.ref_name != github.event.repository.default_branch }}`. Como este workflow roda apenas em `pull_request` (e não em `push` na `main`), deixar o padrão impediria que PRs internos gravassem o cache do Gradle na primeira execução (`RNF-02`).
 - **Decisão**: configurar explicitamente `cache-read-only: ${{ github.event.pull_request.head.repo.fork == true }}`.
 - **Justificativa**: PRs abertos a partir de branches do próprio repositório leem e gravam cache (garantindo retorno <= 10 min após aquecimento), enquanto PRs originados de forks externos mantêm cache estritamente somente leitura para proteger o repositório público contra poluição de cache (`RNF-03`).
+- **Decisão RNF-05**: configurar `cache-provider: basic` para usar o cache open-source do GitHub Actions, sem depender do serviço comercial `gradle-actions-caching`.
 
 ### 4. Segurança e Fixação de Versões (Supply Chain)
 
@@ -91,7 +92,7 @@ Todas as actions oficiais serão fixadas por commit SHA completo de 40 caractere
 
 - `actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1` — com `persist-credentials: false`.
 - `actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0` — com `distribution: temurin` e `java-version: '21'`.
-- `gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1` — com `validate-wrappers: true` (SHA-256 do `gradle-wrapper.jar` já confirmado como oficial) e `cache-read-only: ${{ github.event.pull_request.head.repo.fork == true }}`.
+- `gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1` — com `validate-wrappers: true`, `cache-provider: basic` (cache open-source do GitHub Actions) e `cache-read-only: ${{ github.event.pull_request.head.repo.fork == true }}`.
 - `actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2` — com `retention-days: 7` e `if-no-files-found: warn`.
 - Permissões no topo do workflow: `permissions: { contents: read }`. Nenhum segredo utilizado.
 
