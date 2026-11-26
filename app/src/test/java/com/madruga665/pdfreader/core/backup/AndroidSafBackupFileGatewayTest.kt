@@ -12,10 +12,12 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.runTest
 import org.junit.After
-import org.junit.Assert.assertEquals
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.FileNotFoundException
@@ -23,6 +25,9 @@ import java.io.IOException
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class AndroidSafBackupFileGatewayTest {
+
+    @get:Rule
+    val tempFolder = TemporaryFolder()
 
     private val testDispatcher = StandardTestDispatcher()
     private lateinit var context: Context
@@ -52,77 +57,69 @@ class AndroidSafBackupFileGatewayTest {
     }
 
     @Test
-    fun readText_validContentWithinLimit_returnsSuccess() = runTest(testDispatcher) {
-        val expected = """{"schemaVersion":1,"appVersion":"1.0.0"}"""
-        every { contentResolver.openInputStream(mockUri) } returns
-            ByteArrayInputStream(expected.toByteArray(Charsets.UTF_8))
+    fun copyUriToTempFile_validBinaryWithinLimit_copiesBytes() = runTest(testDispatcher) {
+        val expected = byteArrayOf(0x53, 0x51, 0x4C, 0x69, 0x74, 0x65, 0x00, 0x01, 0x02)
+        every { contentResolver.openInputStream(mockUri) } returns ByteArrayInputStream(expected)
 
-        val result = gateway.readText("content://backup/valid.json")
+        val dest = tempFolder.newFile("staging.db")
+        val result = gateway.copyUriToTempFile("content://backup/valid.db", dest)
 
         assertTrue(result.isSuccess)
-        assertEquals(expected, result.getOrThrow())
+        assertArrayEquals(expected, dest.readBytes())
     }
 
     @Test
-    fun readText_exceedingMaxBackupBytes_returnsIoExceptionFailure() = runTest(testDispatcher) {
-        val oversized = ByteArray(AndroidSafBackupFileGateway.MAX_BACKUP_BYTES + 1) { 'a'.code.toByte() }
+    fun copyUriToTempFile_exceedingMaxBytes_returnsIoExceptionFailure() = runTest(testDispatcher) {
+        val oversized = ByteArray(1024) { 0x42 }
         every { contentResolver.openInputStream(mockUri) } returns ByteArrayInputStream(oversized)
 
-        val result = gateway.readText("content://backup/huge.json")
+        val dest = tempFolder.newFile("too_big.db")
+        val result = gateway.copyUriToTempFile("content://backup/huge.db", dest, maxBytes = 512L)
 
         assertTrue(result.isFailure)
-        val error = result.exceptionOrNull()
-        assertTrue(error is IOException)
-        assertEquals("Arquivo excede o tamanho máximo de backup (5 MB).", error?.message)
+        assertTrue(result.exceptionOrNull() is IOException)
     }
 
     @Test
-    fun writeText_wtModeSucceeds_writesBytesWithoutFallback() = runTest(testDispatcher) {
+    fun writeFileToUri_wtModeSucceeds_writesBytesWithoutFallback() = runTest(testDispatcher) {
+        val source = tempFolder.newFile("export.db").apply {
+            writeBytes(byteArrayOf(1, 2, 3, 4, 5))
+        }
         val output = ByteArrayOutputStream()
         every { contentResolver.openOutputStream(mockUri, "wt") } returns output
 
-        val result = gateway.writeText("content://backup/out.json", "hello-backup")
+        val result = gateway.writeFileToUri("content://backup/out.db", source)
 
         assertTrue(result.isSuccess)
-        assertEquals("hello-backup", output.toString(Charsets.UTF_8.name()))
+        assertArrayEquals(byteArrayOf(1, 2, 3, 4, 5), output.toByteArray())
         verify(exactly = 1) { contentResolver.openOutputStream(mockUri, "wt") }
         verify(exactly = 0) { contentResolver.openOutputStream(mockUri) }
     }
 
     @Test
-    fun writeText_wtModeThrowsException_fallsBackToDefaultMode() = runTest(testDispatcher) {
+    fun writeFileToUri_wtModeThrows_fallsBackToDefaultMode() = runTest(testDispatcher) {
+        val source = tempFolder.newFile("export_fb.db").apply {
+            writeBytes(byteArrayOf(9, 8, 7))
+        }
         val fallbackOutput = ByteArrayOutputStream()
         every { contentResolver.openOutputStream(mockUri, "wt") } throws IllegalArgumentException("Mode wt not supported")
         every { contentResolver.openOutputStream(mockUri) } returns fallbackOutput
 
-        val result = gateway.writeText("content://backup/out.json", "fallback-after-throw")
+        val result = gateway.writeFileToUri("content://backup/out.db", source)
 
         assertTrue(result.isSuccess)
-        assertEquals("fallback-after-throw", fallbackOutput.toString(Charsets.UTF_8.name()))
+        assertArrayEquals(byteArrayOf(9, 8, 7), fallbackOutput.toByteArray())
         verify(exactly = 1) { contentResolver.openOutputStream(mockUri, "wt") }
         verify(exactly = 1) { contentResolver.openOutputStream(mockUri) }
     }
 
     @Test
-    fun writeText_wtModeReturnsNull_fallsBackToDefaultMode() = runTest(testDispatcher) {
-        val fallbackOutput = ByteArrayOutputStream()
-        every { contentResolver.openOutputStream(mockUri, "wt") } returns null
-        every { contentResolver.openOutputStream(mockUri) } returns fallbackOutput
-
-        val result = gateway.writeText("content://backup/out.json", "fallback-after-null")
-
-        assertTrue(result.isSuccess)
-        assertEquals("fallback-after-null", fallbackOutput.toString(Charsets.UTF_8.name()))
-        verify(exactly = 1) { contentResolver.openOutputStream(mockUri, "wt") }
-        verify(exactly = 1) { contentResolver.openOutputStream(mockUri) }
-    }
-
-    @Test
-    fun writeText_bothModesFailOrReturnNull_returnsFailure() = runTest(testDispatcher) {
+    fun writeFileToUri_bothModesFailOrReturnNull_returnsFailure() = runTest(testDispatcher) {
+        val source = tempFolder.newFile("export_fail.db").apply { writeBytes(byteArrayOf(1)) }
         every { contentResolver.openOutputStream(mockUri, "wt") } throws FileNotFoundException("No wt")
         every { contentResolver.openOutputStream(mockUri) } returns null
 
-        val result = gateway.writeText("content://backup/out.json", "will-fail")
+        val result = gateway.writeFileToUri("content://backup/out.db", source)
 
         assertTrue(result.isFailure)
         assertTrue(result.exceptionOrNull() is IOException)

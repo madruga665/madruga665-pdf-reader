@@ -19,4 +19,5 @@ sealed interface ReaderIntent {
     data object SaveCurrentSpeedAsDocumentDefault : ReaderIntent
     data object ResetDocumentSpeedToDefault : ReaderIntent
     data object DismissError : ReaderIntent
+    data object RequestRelinkCurrentDocument : ReaderIntent
 }

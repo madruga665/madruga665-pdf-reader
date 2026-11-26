@@ -13,6 +13,5 @@ interface ReadingSessionStore {
     suspend fun clearCustomDocumentSpeed(documentUri: String)
     suspend fun saveDocumentFileName(documentUri: String, fileName: String) {}
     suspend fun getAllSessionsSnapshot(): List<ReadingSession> = emptyList()
-    suspend fun replaceAllData(globalDefaultSpeedPxPerSec: Float, sessions: List<ReadingSession>) {}
     suspend fun findCustomSpeedByFileName(fileName: String): Float? = null
 }

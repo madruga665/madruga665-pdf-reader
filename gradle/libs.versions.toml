@@ -15,6 +15,7 @@ coroutines = "1.9.0"
 turbine = "1.2.0"
 mockk = "1.13.13"
 json = "20240303"
+sqliteJdbc = "3.47.1.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -43,6 +44,7 @@ kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-cor
 turbine = { group = "app.cash.turbine", name = "turbine", version.ref = "turbine" }
 mockk = { group = "io.mockk", name = "mockk", version.ref = "mockk" }
 json = { group = "org.json", name = "json", version.ref = "json" }
+sqlite-jdbc = { group = "org.xerial", name = "sqlite-jdbc", version.ref = "sqliteJdbc" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

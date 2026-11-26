@@ -7,7 +7,8 @@ data class RecentDocument(
     val lastReadPageIndex: Int,
     val progressRatio: Float,
     val lastAccessedTimestamp: Long = System.currentTimeMillis(),
-    val isAvailable: Boolean = true
+    val isAvailable: Boolean = true,
+    val id: String = ""
 ) {
     init {
         require(uri.isNotBlank()) { "uri cannot be blank" }

@@ -6,12 +6,13 @@ import androidx.lifecycle.viewModelScope
 import com.madruga665.pdfreader.core.engine.AutoScrollEngine
 import com.madruga665.pdfreader.core.engine.DefaultAutoScrollEngine
 import com.madruga665.pdfreader.core.home.RecentsRepository
-import com.madruga665.pdfreader.core.model.PdfDocument
+import com.madruga665.pdfreader.core.model.PdfDocumentRecord
 import com.madruga665.pdfreader.core.model.ReaderErrorState
 import com.madruga665.pdfreader.core.model.ReadingSession
 import com.madruga665.pdfreader.core.model.RecentDocument
 import com.madruga665.pdfreader.core.model.SpeedPreset
 import com.madruga665.pdfreader.core.repository.PdfDocumentRepository
+import com.madruga665.pdfreader.core.storage.PdfDocumentStore
 import com.madruga665.pdfreader.core.storage.ReadingSessionStore
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
@@ -41,7 +42,6 @@ class ReaderViewModel(
     private var lastLoadedUri: Uri? = null
 
     init {
-        // Collect engine state to update view state
         viewModelScope.launch {
             autoScrollEngine.scrollConfig.collect { config ->
                 _viewState.update { current ->
@@ -79,82 +79,138 @@ class ReaderViewModel(
             is ReaderIntent.EndOfDocumentReached -> onEndOfDocumentReached()
             is ReaderIntent.SaveCurrentSpeedAsDocumentDefault -> saveCurrentSpeedAsDocumentDefault()
             is ReaderIntent.ResetDocumentSpeedToDefault -> resetDocumentSpeedToDefault()
-            is ReaderIntent.DismissError -> _viewState.update { it.copy(error = ReaderErrorState.None) }
+            is ReaderIntent.DismissError -> _viewState.update {
+                it.copy(error = ReaderErrorState.None, unavailableDocumentId = null)
+            }
+            is ReaderIntent.RequestRelinkCurrentDocument -> requestRelinkCurrentDocument()
         }
     }
 
     private fun openDocument(uri: Uri) {
         lastLoadedUri = uri
         viewModelScope.launch {
-            _viewState.update { it.copy(isLoading = true, error = ReaderErrorState.None) }
+            _viewState.update {
+                it.copy(isLoading = true, error = ReaderErrorState.None, unavailableDocumentId = null)
+            }
             val result = repository.openDocument(uri)
             result.fold(
                 onSuccess = { doc ->
                     val uriString = uri.toString()
-                    val resolvedFileName = doc.fileName.ifBlank { uri.lastPathSegment ?: "Document.pdf" }
-                    if (doc.fileName.isNotBlank()) {
-                        sessionStore.saveDocumentFileName(uriString, doc.fileName)
-                    }
+                    val resolvedFileName = doc.fileName.ifBlank { uri.lastPathSegment ?: PdfDocumentRecord.DEFAULT_FILE_NAME }
+                    val safePageCount = doc.pageCount.coerceAtLeast(1)
 
-                    val savedSession = sessionStore.getSession(uriString).firstOrNull()
-                    val exactCustomSpeed = sessionStore.getCustomDocumentSpeed(uriString).firstOrNull()
-                        ?: savedSession?.customDefaultSpeedPxPerSec
-                    val savedCustomSpeed = exactCustomSpeed ?: run {
-                        val reconciled = if (doc.fileName.isNotBlank()) {
-                            sessionStore.findCustomSpeedByFileName(doc.fileName)
-                                ?.takeIf { it.isFinite() && it in 10.0f..500.0f }
+                    if (sessionStore is PdfDocumentStore) {
+                        val record = sessionStore.registerOrOpenDocument(
+                            uri = uriString,
+                            fileName = resolvedFileName,
+                            pageCount = safePageCount
+                        )
+                        val initialSpeed = record.customDefaultSpeedPxPerSec
+                            ?: record.preferredSpeedPxPerSec
+
+                        autoScrollEngine.setVelocity(initialSpeed)
+
+                        _viewState.update {
+                            it.copy(
+                                isLoading = false,
+                                activeDocumentId = record.id,
+                                unavailableDocumentId = null,
+                                document = doc,
+                                totalPages = doc.pageCount,
+                                currentPageIndex = record.currentPageIndex.coerceIn(0, safePageCount - 1),
+                                scrollProgressRatio = record.normalizedScrollRatio.coerceIn(0.0f, 1.0f),
+                                zoomScale = record.zoomScale.coerceIn(0.5f, 4.0f),
+                                currentSpeedPxPerSec = initialSpeed,
+                                documentSavedSpeedPxPerSec = record.customDefaultSpeedPxPerSec,
+                                error = ReaderErrorState.None
+                            )
+                        }
+                    } else {
+                        if (doc.fileName.isNotBlank()) {
+                            sessionStore.saveDocumentFileName(uriString, doc.fileName)
+                        }
+                        val savedSession = sessionStore.getSession(uriString).firstOrNull()
+                        val savedCustomSpeed = sessionStore.getCustomDocumentSpeed(uriString).firstOrNull()
+                            ?: savedSession?.customDefaultSpeedPxPerSec
+
+                        val initialSpeed = savedCustomSpeed
+                            ?: savedSession?.preferredSpeedPxPerSec
+                            ?: sessionStore.getGlobalDefaultSpeed().firstOrNull()
+                            ?: SpeedPreset.MEDIUM.speedPxPerSec
+
+                        autoScrollEngine.setVelocity(initialSpeed)
+
+                        _viewState.update {
+                            it.copy(
+                                isLoading = false,
+                                activeDocumentId = savedSession?.documentId?.takeIf { id -> id.isNotBlank() },
+                                unavailableDocumentId = null,
+                                document = doc,
+                                totalPages = doc.pageCount,
+                                currentPageIndex = (savedSession?.currentPageIndex ?: 0).coerceIn(0, safePageCount - 1),
+                                scrollProgressRatio = (savedSession?.normalizedScrollRatio ?: 0.0f).coerceIn(0.0f, 1.0f),
+                                zoomScale = (savedSession?.zoomScale ?: 1.0f).coerceIn(0.5f, 4.0f),
+                                currentSpeedPxPerSec = initialSpeed,
+                                documentSavedSpeedPxPerSec = savedCustomSpeed,
+                                error = ReaderErrorState.None
+                            )
+                        }
+
+                        recentsRepository?.recordDocumentAccess(
+                            RecentDocument(
+                                uri = uriString,
+                                fileName = resolvedFileName,
+                                pageCount = safePageCount,
+                                lastReadPageIndex = (savedSession?.currentPageIndex ?: 0).coerceIn(0, safePageCount - 1),
+                                progressRatio = (savedSession?.normalizedScrollRatio ?: 0.0f).coerceIn(0.0f, 1.0f),
+                                lastAccessedTimestamp = System.currentTimeMillis()
+                            )
+                        )
+                    }
+                },
+                onFailure = { error ->
+                    val uriString = uri.toString()
+                    val isAvailabilityError = error is java.io.FileNotFoundException || error is SecurityException
+                    var unavailableDocId: String? = null
+
+                    if (isAvailabilityError) {
+                        if (sessionStore is PdfDocumentStore) {
+                            sessionStore.setDocumentAvailability(uriString, false)
+                            unavailableDocId = sessionStore.getByUri(uriString)?.id
                         } else {
-                            null
+                            recentsRepository?.updateAvailability(uriString, false)
+                            unavailableDocId = recentsRepository?.getByUri(uriString)?.id?.takeIf { it.isNotBlank() }
                         }
-                        if (reconciled != null) {
-                            sessionStore.saveCustomDocumentSpeed(uriString, reconciled)
-                        }
-                        reconciled
                     }
 
-                    val initialSpeed = savedCustomSpeed
-                        ?: savedSession?.preferredSpeedPxPerSec
-                        ?: sessionStore.getGlobalDefaultSpeed().firstOrNull()
-                        ?: SpeedPreset.MEDIUM.speedPxPerSec
-
-                    autoScrollEngine.setVelocity(initialSpeed)
-
+                    val errorState = when {
+                        error is java.io.FileNotFoundException ->
+                            ReaderErrorState.FileNotFound(error.message ?: "Arquivo não encontrado ou movido.")
+                        error is SecurityException ->
+                            ReaderErrorState.FileNotFound("Permissão de acesso ao arquivo expirada ou indisponível. Selecione o PDF novamente.")
+                        error.message?.contains("password", ignoreCase = true) == true ->
+                            ReaderErrorState.PasswordRequired()
+                        error is OutOfMemoryError ->
+                            ReaderErrorState.OutOfMemory("Device ran out of memory. Try closing background applications.")
+                        else ->
+                            ReaderErrorState.CorruptedDocument(error.localizedMessage ?: "Unknown parsing error")
+                    }
                     _viewState.update {
                         it.copy(
                             isLoading = false,
-                            document = doc,
-                            totalPages = doc.pageCount,
-                            currentPageIndex = savedSession?.currentPageIndex ?: 0,
-                            scrollProgressRatio = savedSession?.normalizedScrollRatio ?: 0.0f,
-                            zoomScale = savedSession?.zoomScale ?: 1.0f,
-                            currentSpeedPxPerSec = initialSpeed,
-                            documentSavedSpeedPxPerSec = savedCustomSpeed,
-                            error = ReaderErrorState.None
+                            error = errorState,
+                            unavailableDocumentId = unavailableDocId
                         )
                     }
-
-                    recentsRepository?.recordDocumentAccess(
-                        RecentDocument(
-                            uri = uriString,
-                            fileName = resolvedFileName,
-                            pageCount = doc.pageCount.coerceAtLeast(1),
-                            lastReadPageIndex = (savedSession?.currentPageIndex ?: 0).coerceIn(0, (doc.pageCount - 1).coerceAtLeast(0)),
-                            progressRatio = (savedSession?.normalizedScrollRatio ?: 0.0f).coerceIn(0.0f, 1.0f),
-                            lastAccessedTimestamp = System.currentTimeMillis()
-                        )
-                    )
-                },
-                onFailure = { error ->
-                    val errorState = when {
-                        error is java.io.FileNotFoundException -> ReaderErrorState.FileNotFound(error.message ?: "File not found")
-                        error is SecurityException -> ReaderErrorState.FileNotFound("Permissão de acesso ao arquivo expirada ou indisponível. Selecione o PDF novamente.")
-                        error.message?.contains("password", ignoreCase = true) == true -> ReaderErrorState.PasswordRequired()
-                        error is OutOfMemoryError -> ReaderErrorState.OutOfMemory("Device ran out of memory. Try closing background applications.")
-                        else -> ReaderErrorState.CorruptedDocument(error.localizedMessage ?: "Unknown parsing error")
-                    }
-                    _viewState.update { it.copy(isLoading = false, error = errorState) }
                 }
             )
+        }
+    }
+
+    private fun requestRelinkCurrentDocument() {
+        val docId = _viewState.value.unavailableDocumentId ?: return
+        viewModelScope.launch {
+            _sideEffects.send(ReaderSideEffect.LaunchRelinkPdfPicker(docId))
         }
     }
 
@@ -172,18 +228,31 @@ class ReaderViewModel(
 
     private fun persistSpeed(speedPxPerSec: Float) {
         viewModelScope.launch {
-            sessionStore.setGlobalDefaultSpeed(speedPxPerSec)
-            val doc = _viewState.value.document ?: return@launch
-            val docUri = doc.uri.toString()
-            val session = ReadingSession(
-                documentUri = docUri,
-                currentPageIndex = _viewState.value.currentPageIndex,
-                normalizedScrollRatio = _viewState.value.scrollProgressRatio,
-                zoomScale = _viewState.value.zoomScale,
-                preferredSpeedPxPerSec = speedPxPerSec.coerceIn(10f, 500f),
-                fileName = doc.fileName
-            )
-            sessionStore.saveSession(session)
+            val clampedSpeed = PdfDocumentRecord.sanitizeSpeed(speedPxPerSec)
+            sessionStore.setGlobalDefaultSpeed(clampedSpeed)
+            val state = _viewState.value
+            val doc = state.document ?: return@launch
+            val docId = state.activeDocumentId
+            if (sessionStore is PdfDocumentStore && !docId.isNullOrBlank()) {
+                sessionStore.updateReadingProgress(
+                    documentId = docId,
+                    currentPageIndex = state.currentPageIndex,
+                    normalizedScrollRatio = state.scrollProgressRatio,
+                    zoomScale = state.zoomScale,
+                    preferredSpeedPxPerSec = clampedSpeed
+                )
+            } else {
+                val session = ReadingSession(
+                    documentId = docId.orEmpty(),
+                    documentUri = doc.uri.toString(),
+                    currentPageIndex = state.currentPageIndex,
+                    normalizedScrollRatio = state.scrollProgressRatio,
+                    zoomScale = state.zoomScale,
+                    preferredSpeedPxPerSec = clampedSpeed,
+                    fileName = doc.fileName
+                )
+                sessionStore.saveSession(session)
+            }
         }
     }
 
@@ -194,7 +263,13 @@ class ReaderViewModel(
     }
 
     private fun onPageChanged(pageIndex: Int) {
-        _viewState.update { it.copy(currentPageIndex = pageIndex.coerceAtLeast(0)) }
+        val maxIndex = (_viewState.value.totalPages - 1).coerceAtLeast(0)
+        val safePage = if (_viewState.value.totalPages > 0) {
+            pageIndex.coerceIn(0, maxIndex)
+        } else {
+            pageIndex.coerceAtLeast(0)
+        }
+        _viewState.update { it.copy(currentPageIndex = safePage) }
         saveCurrentProgress()
     }
 
@@ -230,28 +305,42 @@ class ReaderViewModel(
     }
 
     private fun saveCurrentProgress() {
-        val doc = _viewState.value.document ?: return
+        val state = _viewState.value
+        val doc = state.document ?: return
         val docUri = doc.uri.toString()
+        val docId = state.activeDocumentId
         viewModelScope.launch {
-            val session = ReadingSession(
-                documentUri = docUri,
-                currentPageIndex = _viewState.value.currentPageIndex,
-                normalizedScrollRatio = _viewState.value.scrollProgressRatio,
-                zoomScale = _viewState.value.zoomScale,
-                preferredSpeedPxPerSec = _viewState.value.currentSpeedPxPerSec.coerceIn(10f, 500f),
-                fileName = doc.fileName
-            )
-            sessionStore.saveSession(session)
-            recentsRepository?.recordDocumentAccess(
-                RecentDocument(
-                    uri = docUri,
-                    fileName = doc.fileName.ifBlank { doc.uri.lastPathSegment ?: "Document.pdf" },
-                    pageCount = doc.pageCount.coerceAtLeast(1),
-                    lastReadPageIndex = _viewState.value.currentPageIndex.coerceIn(0, (doc.pageCount - 1).coerceAtLeast(0)),
-                    progressRatio = _viewState.value.scrollProgressRatio.coerceIn(0.0f, 1.0f),
-                    lastAccessedTimestamp = System.currentTimeMillis()
+            if (sessionStore is PdfDocumentStore && !docId.isNullOrBlank()) {
+                sessionStore.updateReadingProgress(
+                    documentId = docId,
+                    currentPageIndex = state.currentPageIndex,
+                    normalizedScrollRatio = state.scrollProgressRatio,
+                    zoomScale = state.zoomScale,
+                    preferredSpeedPxPerSec = state.currentSpeedPxPerSec.coerceIn(10f, 500f)
                 )
-            )
+            } else {
+                val session = ReadingSession(
+                    documentId = docId.orEmpty(),
+                    documentUri = docUri,
+                    currentPageIndex = state.currentPageIndex,
+                    normalizedScrollRatio = state.scrollProgressRatio,
+                    zoomScale = state.zoomScale,
+                    preferredSpeedPxPerSec = state.currentSpeedPxPerSec.coerceIn(10f, 500f),
+                    fileName = doc.fileName
+                )
+                sessionStore.saveSession(session)
+                recentsRepository?.recordDocumentAccess(
+                    RecentDocument(
+                        id = docId.orEmpty(),
+                        uri = docUri,
+                        fileName = doc.fileName.ifBlank { doc.uri.lastPathSegment ?: PdfDocumentRecord.DEFAULT_FILE_NAME },
+                        pageCount = doc.pageCount.coerceAtLeast(1),
+                        lastReadPageIndex = state.currentPageIndex.coerceIn(0, (doc.pageCount - 1).coerceAtLeast(0)),
+                        progressRatio = state.scrollProgressRatio.coerceIn(0.0f, 1.0f),
+                        lastAccessedTimestamp = System.currentTimeMillis()
+                    )
+                )
+            }
         }
     }
 

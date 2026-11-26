@@ -210,12 +210,12 @@ class HomeViewModelTest {
     fun inspectBackup_invalidFile_setsErrorMessageAndDoesNotOpenPreview() = runTest {
         val backupRepo = mockk<com.madruga665.pdfreader.core.backup.BackupRepository>()
         val uri = mockk<Uri>(relaxed = true)
-        every { uri.toString() } returns "content://backup/invalid.json"
+        every { uri.toString() } returns "content://backup/invalid.db"
 
-        coEvery { backupRepo.previewBackup("content://backup/invalid.json") } returns
+        coEvery { backupRepo.previewBackup("content://backup/invalid.db") } returns
             com.madruga665.pdfreader.core.backup.BackupParseResult.Failure(
-                reason = com.madruga665.pdfreader.core.backup.BackupErrorReason.INVALID_JSON,
-                message = "Arquivo JSON inválido ou corrompido."
+                reason = com.madruga665.pdfreader.core.backup.BackupErrorReason.INVALID_SQLITE_FILE,
+                message = "Arquivo selecionado não é um banco de dados SQLite válido (.db)."
             )
 
         val vm = HomeViewModel(
@@ -228,7 +228,10 @@ class HomeViewModelTest {
         testDispatcher.scheduler.advanceUntilIdle()
 
         assertNull(vm.viewState.value.pendingRestorePreview)
-        assertEquals("Arquivo JSON inválido ou corrompido.", vm.viewState.value.errorMessage)
+        assertEquals(
+            "Arquivo selecionado não é um banco de dados SQLite válido (.db).",
+            vm.viewState.value.errorMessage
+        )
     }
 
     @Test
@@ -378,5 +381,352 @@ class HomeViewModelTest {
         assertNull(vm.viewState.value.pendingRestorePreview)
         assertEquals(false, vm.viewState.value.isBackupInProgress)
         assertTrue(vm.viewState.value.errorMessage?.contains("DataStore write failed") == true)
+    }
+
+    @Test
+    fun refresh_checksAvailabilityAndMarksUnreadableRecentsUnavailable() = runTest {
+        val availabilityChecker = mockk<com.madruga665.pdfreader.core.documents.DocumentAvailabilityChecker>(relaxed = true)
+        val availableDoc = RecentDocument(
+            id = "id-1",
+            uri = "content://pdf/ok.pdf",
+            fileName = "ok.pdf",
+            pageCount = 5,
+            lastReadPageIndex = 1,
+            progressRatio = 0.2f,
+            lastAccessedTimestamp = 2000L,
+            isAvailable = true
+        )
+        val missingDoc = RecentDocument(
+            id = "id-2",
+            uri = "content://pdf/missing.pdf",
+            fileName = "missing.pdf",
+            pageCount = 10,
+            lastReadPageIndex = 4,
+            progressRatio = 0.4f,
+            lastAccessedTimestamp = 1000L,
+            isAvailable = true
+        )
+        coEvery { recentsRepository.getRecentDocuments() } returns flowOf(listOf(availableDoc, missingDoc))
+        coEvery { availabilityChecker.isReadable("content://pdf/ok.pdf") } returns true
+        coEvery { availabilityChecker.isReadable("content://pdf/missing.pdf") } returns false
+
+        val vm = HomeViewModel(
+            recentsRepository = recentsRepository,
+            favoriteFoldersRepository = favoriteFoldersRepository,
+            availabilityChecker = availabilityChecker
+        )
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        vm.onIntent(HomeIntent.Refresh)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        coVerify(atLeast = 1) {
+            recentsRepository.updateAvailabilityBatch(
+                match { it["content://pdf/missing.pdf"] == false }
+            )
+        }
+    }
+
+    @Test
+    fun requestRelinkPdf_emitsLaunchRelinkPdfPickerSideEffect() = runTest {
+        viewModel.sideEffects.test {
+            viewModel.onIntent(HomeIntent.RequestRelinkPdf("doc-uuid-1"))
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            val effect = awaitItem()
+            assertTrue(effect is HomeSideEffect.LaunchRelinkPdfPicker)
+            assertEquals("doc-uuid-1", (effect as HomeSideEffect.LaunchRelinkPdfPicker).documentId)
+        }
+    }
+
+    @Test
+    fun completeRelinkPdf_validPdf_relinksPreservingIdAndNavigatesToReader() = runTest {
+        val documentStore = mockk<com.madruga665.pdfreader.core.storage.PdfDocumentStore>(relaxed = true)
+        val availabilityChecker = mockk<com.madruga665.pdfreader.core.documents.DocumentAvailabilityChecker>(relaxed = true)
+        val target = com.madruga665.pdfreader.core.model.PdfDocumentRecord.createSanitized(
+            id = "doc-uuid-1",
+            documentUri = "content://pdf/old.pdf",
+            fileName = "old.pdf",
+            pageCount = 10,
+            currentPageIndex = 5,
+            customDefaultSpeedPxPerSec = 160.0f,
+            isAvailable = false
+        )
+        val relinked = target.copy(
+            documentUri = "content://pdf/new.pdf",
+            fileName = "new.pdf",
+            pageCount = 3,
+            currentPageIndex = 2,
+            isAvailable = true
+        )
+        val newUri = mockk<Uri>(relaxed = true)
+        every { newUri.toString() } returns "content://pdf/new.pdf"
+
+        coEvery { documentStore.getById("doc-uuid-1") } returns target
+        coEvery { documentStore.getByUri("content://pdf/new.pdf") } returns null
+        coEvery { availabilityChecker.inspectPdf("content://pdf/new.pdf") } returns Result.success(
+            com.madruga665.pdfreader.core.documents.InspectedPdfMetadata(
+                uri = "content://pdf/new.pdf",
+                fileName = "new.pdf",
+                pageCount = 3
+            )
+        )
+        coEvery {
+            documentStore.relinkDocument(
+                targetDocumentId = "doc-uuid-1",
+                newUri = "content://pdf/new.pdf",
+                newFileName = "new.pdf",
+                newPageCount = 3,
+                consolidateConflictingDocumentId = null,
+                nowMillis = any()
+            )
+        } returns Result.success(relinked)
+
+        val vm = HomeViewModel(
+            recentsRepository = recentsRepository,
+            favoriteFoldersRepository = favoriteFoldersRepository,
+            documentStore = documentStore,
+            availabilityChecker = availabilityChecker
+        )
+
+        vm.sideEffects.test {
+            vm.onIntent(HomeIntent.CompleteRelinkPdf("doc-uuid-1", newUri))
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            coVerify(exactly = 1) { availabilityChecker.takePersistableReadPermission("content://pdf/new.pdf") }
+            val effect = awaitItem()
+            assertTrue(effect is HomeSideEffect.NavigateToReader)
+            assertEquals(newUri, (effect as HomeSideEffect.NavigateToReader).uri)
+        }
+    }
+
+    @Test
+    fun completeRelinkPdf_invalidFile_preservesOriginalAndEmitsErrorToast() = runTest {
+        val documentStore = mockk<com.madruga665.pdfreader.core.storage.PdfDocumentStore>(relaxed = true)
+        val availabilityChecker = mockk<com.madruga665.pdfreader.core.documents.DocumentAvailabilityChecker>(relaxed = true)
+        val target = com.madruga665.pdfreader.core.model.PdfDocumentRecord.createSanitized(
+            id = "doc-uuid-1",
+            documentUri = "content://pdf/old.pdf",
+            fileName = "old.pdf",
+            pageCount = 10,
+            isAvailable = false
+        )
+        val badUri = mockk<Uri>(relaxed = true)
+        every { badUri.toString() } returns "content://files/not_a_pdf.txt"
+
+        coEvery { documentStore.getById("doc-uuid-1") } returns target
+        coEvery { availabilityChecker.inspectPdf("content://files/not_a_pdf.txt") } returns
+            Result.failure(IllegalArgumentException("Arquivo não é um PDF válido"))
+
+        val vm = HomeViewModel(
+            recentsRepository = recentsRepository,
+            favoriteFoldersRepository = favoriteFoldersRepository,
+            documentStore = documentStore,
+            availabilityChecker = availabilityChecker
+        )
+
+        vm.sideEffects.test {
+            vm.onIntent(HomeIntent.CompleteRelinkPdf("doc-uuid-1", badUri))
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            val effect = awaitItem()
+            assertTrue(effect is HomeSideEffect.ShowToast)
+            val toast = effect as HomeSideEffect.ShowToast
+            assertTrue(toast.isLong)
+            assertTrue(toast.message.contains("Arquivo não é um PDF válido"))
+            assertNull(vm.viewState.value.errorMessage)
+            coVerify(exactly = 0) { documentStore.relinkDocument(any(), any(), any(), any(), any(), any()) }
+        }
+    }
+
+    @Test
+    fun confirmConsolidateRelinkConflict_failure_emitsErrorToast() = runTest {
+        val documentStore = mockk<com.madruga665.pdfreader.core.storage.PdfDocumentStore>(relaxed = true)
+        val availabilityChecker = mockk<com.madruga665.pdfreader.core.documents.DocumentAvailabilityChecker>(relaxed = true)
+        val target = com.madruga665.pdfreader.core.model.PdfDocumentRecord.createSanitized(
+            id = "doc-uuid-a",
+            documentUri = "content://pdf/a.pdf",
+            fileName = "a.pdf",
+            pageCount = 10,
+            isAvailable = false
+        )
+        val conflicting = com.madruga665.pdfreader.core.model.PdfDocumentRecord.createSanitized(
+            id = "doc-uuid-b",
+            documentUri = "content://pdf/b.pdf",
+            fileName = "b.pdf",
+            pageCount = 6,
+            isAvailable = true
+        )
+        val conflictUri = mockk<Uri>(relaxed = true)
+        every { conflictUri.toString() } returns "content://pdf/b.pdf"
+
+        coEvery { documentStore.getById("doc-uuid-a") } returns target
+        coEvery { documentStore.getByUri("content://pdf/b.pdf") } returns conflicting
+        coEvery { availabilityChecker.inspectPdf("content://pdf/b.pdf") } returns Result.success(
+            com.madruga665.pdfreader.core.documents.InspectedPdfMetadata(
+                uri = "content://pdf/b.pdf",
+                fileName = "b.pdf",
+                pageCount = 6
+            )
+        )
+        coEvery {
+            documentStore.relinkDocument(
+                targetDocumentId = "doc-uuid-a",
+                newUri = "content://pdf/b.pdf",
+                newFileName = "b.pdf",
+                newPageCount = 6,
+                consolidateConflictingDocumentId = "doc-uuid-b",
+                nowMillis = any()
+            )
+        } returns Result.failure(IllegalStateException("SQLite lock error"))
+
+        val vm = HomeViewModel(
+            recentsRepository = recentsRepository,
+            favoriteFoldersRepository = favoriteFoldersRepository,
+            documentStore = documentStore,
+            availabilityChecker = availabilityChecker
+        )
+
+        vm.onIntent(HomeIntent.CompleteRelinkPdf("doc-uuid-a", conflictUri))
+        testDispatcher.scheduler.advanceUntilIdle()
+        assertTrue(vm.viewState.value.relinkConflict != null)
+
+        vm.sideEffects.test {
+            vm.onIntent(HomeIntent.ConfirmConsolidateRelinkConflict)
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            val effect = awaitItem()
+            assertTrue(effect is HomeSideEffect.ShowToast)
+            val toast = effect as HomeSideEffect.ShowToast
+            assertTrue(toast.isLong)
+            assertTrue(toast.message.contains("SQLite lock error"))
+            assertNull(vm.viewState.value.errorMessage)
+        }
+    }
+
+    @Test
+    fun completeRelinkPdf_uriConflict_exposesConflictDialogAndSupportsConsolidation() = runTest {
+        val documentStore = mockk<com.madruga665.pdfreader.core.storage.PdfDocumentStore>(relaxed = true)
+        val availabilityChecker = mockk<com.madruga665.pdfreader.core.documents.DocumentAvailabilityChecker>(relaxed = true)
+        val target = com.madruga665.pdfreader.core.model.PdfDocumentRecord.createSanitized(
+            id = "doc-uuid-a",
+            documentUri = "content://pdf/a.pdf",
+            fileName = "a.pdf",
+            pageCount = 10,
+            customDefaultSpeedPxPerSec = 160.0f,
+            isAvailable = false
+        )
+        val conflicting = com.madruga665.pdfreader.core.model.PdfDocumentRecord.createSanitized(
+            id = "doc-uuid-b",
+            documentUri = "content://pdf/b.pdf",
+            fileName = "b.pdf",
+            pageCount = 6,
+            isAvailable = true
+        )
+        val conflictUri = mockk<Uri>(relaxed = true)
+        every { conflictUri.toString() } returns "content://pdf/b.pdf"
+        every { Uri.parse("content://pdf/b.pdf") } returns conflictUri
+
+        coEvery { documentStore.getById("doc-uuid-a") } returns target
+        coEvery { documentStore.getByUri("content://pdf/b.pdf") } returns conflicting
+        coEvery { availabilityChecker.inspectPdf("content://pdf/b.pdf") } returns Result.success(
+            com.madruga665.pdfreader.core.documents.InspectedPdfMetadata(
+                uri = "content://pdf/b.pdf",
+                fileName = "b.pdf",
+                pageCount = 6
+            )
+        )
+        coEvery {
+            documentStore.relinkDocument(
+                targetDocumentId = "doc-uuid-a",
+                newUri = "content://pdf/b.pdf",
+                newFileName = "b.pdf",
+                newPageCount = 6,
+                consolidateConflictingDocumentId = "doc-uuid-b",
+                nowMillis = any()
+            )
+        } returns Result.success(target.copy(documentUri = "content://pdf/b.pdf", fileName = "b.pdf", pageCount = 6, isAvailable = true))
+
+        val vm = HomeViewModel(
+            recentsRepository = recentsRepository,
+            favoriteFoldersRepository = favoriteFoldersRepository,
+            documentStore = documentStore,
+            availabilityChecker = availabilityChecker
+        )
+
+        vm.onIntent(HomeIntent.CompleteRelinkPdf("doc-uuid-a", conflictUri))
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        val conflict = vm.viewState.value.relinkConflict
+        assertTrue(conflict != null)
+        assertEquals("doc-uuid-a", conflict!!.targetRecord.id)
+        assertEquals("doc-uuid-b", conflict.conflictingRecord.id)
+
+        vm.sideEffects.test {
+            vm.onIntent(HomeIntent.ConfirmConsolidateRelinkConflict)
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            assertNull(vm.viewState.value.relinkConflict)
+            val effect = awaitItem()
+            assertTrue(effect is HomeSideEffect.NavigateToReader)
+        }
+    }
+
+    @Test
+    fun confirmRestore_revalidatesRestoredDocumentsAndSupportsRelinkPreservingCustomSpeed() = runTest {
+        val backupRepo = mockk<com.madruga665.pdfreader.core.backup.BackupRepository>()
+        val documentStore = mockk<com.madruga665.pdfreader.core.storage.PdfDocumentStore>(relaxed = true)
+        val availabilityChecker = mockk<com.madruga665.pdfreader.core.documents.DocumentAvailabilityChecker>(relaxed = true)
+
+        val restoredDoc = com.madruga665.pdfreader.core.model.PdfDocumentRecord.createSanitized(
+            id = "restored-uuid-1",
+            documentUri = "content://other_device/book.pdf",
+            fileName = "book.pdf",
+            pageCount = 15,
+            currentPageIndex = 6,
+            customDefaultSpeedPxPerSec = 175.0f,
+            isAvailable = true
+        )
+        val payload = com.madruga665.pdfreader.core.backup.BackupPayload(
+            exportedAt = 1764100000000L,
+            appVersion = "1.0.0",
+            globalDefaultSpeedPxPerSec = 120f,
+            documents = listOf(restoredDoc)
+        )
+        val backupUri = mockk<Uri>(relaxed = true)
+        every { backupUri.toString() } returns "content://backup/device_a.db"
+
+        coEvery { backupRepo.previewBackup("content://backup/device_a.db") } returns
+            com.madruga665.pdfreader.core.backup.BackupParseResult.Success(payload, payload.toSummary())
+        coEvery {
+            backupRepo.restoreBackup(payload, com.madruga665.pdfreader.core.backup.RestoreMode.MERGE)
+        } returns Result.success(
+            com.madruga665.pdfreader.core.backup.BackupRestoreResult(
+                mode = com.madruga665.pdfreader.core.backup.RestoreMode.MERGE,
+                summary = payload.toSummary()
+            )
+        )
+        coEvery { documentStore.getAllDocumentsSnapshot() } returns listOf(restoredDoc)
+        coEvery { availabilityChecker.isReadable("content://other_device/book.pdf") } returns false
+
+        val vm = HomeViewModel(
+            recentsRepository = recentsRepository,
+            favoriteFoldersRepository = favoriteFoldersRepository,
+            backupRepository = backupRepo,
+            documentStore = documentStore,
+            availabilityChecker = availabilityChecker
+        )
+
+        vm.onIntent(HomeIntent.InspectBackupUri(backupUri))
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        vm.onIntent(HomeIntent.ConfirmRestore)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        coVerify(exactly = 1) {
+            documentStore.updateAvailabilityBatch(
+                match { it["content://other_device/book.pdf"] == false }
+            )
+        }
     }
 }

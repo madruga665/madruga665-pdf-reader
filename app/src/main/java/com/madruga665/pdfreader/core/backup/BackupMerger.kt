@@ -1,8 +1,7 @@
 package com.madruga665.pdfreader.core.backup
 
-import com.madruga665.pdfreader.core.home.DataStoreRecentsRepository
 import com.madruga665.pdfreader.core.model.FavoriteFolder
-import com.madruga665.pdfreader.core.model.RecentDocument
+import com.madruga665.pdfreader.core.model.PdfDocumentRecord
 import com.madruga665.pdfreader.core.model.SpeedPreset
 
 object BackupMerger {
@@ -13,12 +12,11 @@ object BackupMerger {
         mode: RestoreMode
     ): BackupPayload {
         if (mode == RestoreMode.REPLACE) {
+            val deduplicatedDocs = deduplicateDocuments(incoming.documents)
             return incoming.copy(
-                globalDefaultSpeedPxPerSec = incoming.globalDefaultSpeedPxPerSec.coerceIn(10.0f, 500.0f),
-                recentDocuments = incoming.recentDocuments
-                    .distinctBy { it.uri }
-                    .sortedByDescending { it.lastAccessedTimestamp }
-                    .take(DataStoreRecentsRepository.MAX_RECENTS),
+                schemaVersion = CURRENT_BACKUP_SCHEMA_VERSION,
+                globalDefaultSpeedPxPerSec = PdfDocumentRecord.sanitizeSpeed(incoming.globalDefaultSpeedPxPerSec),
+                documents = deduplicatedDocs,
                 favoriteFolders = incoming.favoriteFolders
                     .distinctBy { it.treeUri }
                     .sortedByDescending { it.pinnedTimestamp }
@@ -33,10 +31,9 @@ object BackupMerger {
             incoming.globalDefaultSpeedPxPerSec
         } else {
             local.globalDefaultSpeedPxPerSec
-        }.coerceIn(10.0f, 500.0f)
+        }.let(PdfDocumentRecord::sanitizeSpeed)
 
-        val mergedSessions = mergeSessions(local.readingSessions, incoming.readingSessions)
-        val mergedRecents = mergeRecents(local.recentDocuments, incoming.recentDocuments)
+        val mergedDocuments = mergeDocuments(local.documents, incoming.documents)
         val mergedFolders = mergeFolders(local.favoriteFolders, incoming.favoriteFolders)
 
         return BackupPayload(
@@ -44,51 +41,73 @@ object BackupMerger {
             exportedAt = maxOf(local.exportedAt, incoming.exportedAt),
             appVersion = local.appVersion.ifBlank { incoming.appVersion },
             globalDefaultSpeedPxPerSec = resolvedGlobalSpeed,
-            readingSessions = mergedSessions,
-            recentDocuments = mergedRecents,
+            documents = mergedDocuments,
             favoriteFolders = mergedFolders
         )
     }
 
-    private fun mergeSessions(
-        local: List<BackupReadingSession>,
-        incoming: List<BackupReadingSession>
-    ): List<BackupReadingSession> {
-        val result = linkedMapOf<String, BackupReadingSession>()
-        local.forEach { result[it.documentUri] = it }
+    private fun mergeDocuments(
+        local: List<PdfDocumentRecord>,
+        incoming: List<PdfDocumentRecord>
+    ): List<PdfDocumentRecord> {
+        val merged = mutableListOf<PdfDocumentRecord>()
+        merged.addAll(deduplicateDocuments(local))
 
-        incoming.forEach { inc ->
-            val existing = result[inc.documentUri]
-            if (existing == null) {
-                result[inc.documentUri] = inc
+        for (inc in deduplicateDocuments(incoming)) {
+            val matchingIndices = merged.indices.filter { idx ->
+                val existing = merged[idx]
+                existing.id == inc.id || existing.documentUri == inc.documentUri
+            }
+            if (matchingIndices.isEmpty()) {
+                merged.add(inc)
             } else {
-                val winner = if (inc.lastReadTimestamp > existing.lastReadTimestamp) inc else existing
-                val loser = if (winner === inc) existing else inc
-                result[inc.documentUri] = winner.copy(
-                    customDefaultSpeedPxPerSec = winner.customDefaultSpeedPxPerSec ?: loser.customDefaultSpeedPxPerSec,
-                    fileName = winner.fileName.ifBlank { loser.fileName }
+                val colliding = matchingIndices.map { merged[it] }
+                val candidates = colliding + inc
+
+                // Prefer local record on timestamp tie
+                val winner = candidates.reduce { best, candidate ->
+                    if (candidate.lastAccessedAt > best.lastAccessedAt) candidate else best
+                }
+                val stableId = colliding.firstOrNull { it.id == winner.id }?.id
+                    ?: colliding.firstOrNull { it.id == inc.id }?.id
+                    ?: colliding.first().id
+
+                val sortedByRecency = candidates.sortedByDescending { it.lastAccessedAt }
+                val resolvedCustomSpeed = winner.customDefaultSpeedPxPerSec
+                    ?: sortedByRecency.firstNotNullOfOrNull { it.customDefaultSpeedPxPerSec }
+                val resolvedFileName = winner.fileName.ifBlank {
+                    sortedByRecency.firstNotNullOfOrNull { it.fileName.takeIf(String::isNotBlank) }
+                        ?: PdfDocumentRecord.DEFAULT_FILE_NAME
+                }
+                val resolvedIsInRecents = candidates.any { it.isInRecents }
+
+                merged[matchingIndices.first()] = winner.copy(
+                    id = stableId,
+                    customDefaultSpeedPxPerSec = resolvedCustomSpeed,
+                    fileName = resolvedFileName,
+                    isInRecents = resolvedIsInRecents
                 )
+
+                for (extraIndex in matchingIndices.drop(1).asReversed()) {
+                    merged.removeAt(extraIndex)
+                }
             }
         }
-        return result.values.toList()
+
+        return merged.sortedByDescending { it.lastAccessedAt }
     }
 
-    private fun mergeRecents(
-        local: List<RecentDocument>,
-        incoming: List<RecentDocument>
-    ): List<RecentDocument> {
-        val result = linkedMapOf<String, RecentDocument>()
-        local.forEach { result[it.uri] = it }
-
-        incoming.forEach { inc ->
-            val existing = result[inc.uri]
-            if (existing == null || inc.lastAccessedTimestamp > existing.lastAccessedTimestamp) {
-                result[inc.uri] = inc
-            }
+    private fun deduplicateDocuments(documents: List<PdfDocumentRecord>): List<PdfDocumentRecord> {
+        val seenIds = mutableSetOf<String>()
+        val seenUris = mutableSetOf<String>()
+        val result = mutableListOf<PdfDocumentRecord>()
+        for (doc in documents.sortedByDescending { it.lastAccessedAt }) {
+            if (doc.id in seenIds || doc.documentUri in seenUris) continue
+            seenIds.add(doc.id)
+            seenUris.add(doc.documentUri)
+            result.add(doc)
         }
-        return result.values
-            .sortedByDescending { it.lastAccessedTimestamp }
-            .take(DataStoreRecentsRepository.MAX_RECENTS)
+        return result
     }
 
     private fun mergeFolders(
