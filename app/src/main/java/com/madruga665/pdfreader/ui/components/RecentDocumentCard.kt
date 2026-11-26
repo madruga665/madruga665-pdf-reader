@@ -1,7 +1,8 @@
 package com.madruga665.pdfreader.ui.components
 
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -14,21 +15,18 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.PictureAsPdf
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.madruga665.pdfreader.core.model.RecentDocument
+import com.madruga665.pdfreader.ui.theme.NeobrutalismMetrics
+import com.madruga665.pdfreader.ui.theme.NeobrutalismTheme
+import com.madruga665.pdfreader.ui.theme.neobrutalistShadow
 import kotlin.math.roundToInt
 
 @Composable
@@ -38,19 +36,23 @@ fun RecentDocumentCard(
     onRemoveClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Card(
-        modifier = modifier
-            .clip(RoundedCornerShape(16.dp))
-            .clickable(onClick = onClick),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
-        ),
-        shape = RoundedCornerShape(16.dp)
+    val colors = NeobrutalismTheme.colors
+    val iconBoxShape = RoundedCornerShape(NeobrutalismMetrics.CornerRadiusSmall)
+
+    NeobrutalistCard(
+        modifier = modifier,
+        containerColor = colors.surface,
+        borderColor = colors.border,
+        shadowColor = colors.shadow,
+        borderWidth = NeobrutalismMetrics.BorderWidth,
+        shadowOffset = NeobrutalismMetrics.ShadowOffset,
+        shape = RoundedCornerShape(NeobrutalismMetrics.CornerRadiusLarge),
+        onClick = onClick
     ) {
         Column(
             modifier = Modifier
-                .padding(14.dp)
                 .fillMaxWidth()
+                .padding(14.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -61,31 +63,61 @@ fun RecentDocumentCard(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.weight(1f)
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.PictureAsPdf,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(28.dp)
-                    )
+                    Box(
+                        modifier = Modifier.padding(
+                            end = NeobrutalismMetrics.ShadowOffsetCompact,
+                            bottom = NeobrutalismMetrics.ShadowOffsetCompact
+                        )
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(38.dp)
+                                .neobrutalistShadow(
+                                    shadowColor = colors.shadow,
+                                    borderColor = colors.border,
+                                    borderWidth = NeobrutalismMetrics.BorderWidthCompact,
+                                    shadowOffset = NeobrutalismMetrics.ShadowOffsetCompact,
+                                    shape = iconBoxShape
+                                )
+                                .background(colors.accentRed, iconBoxShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.PictureAsPdf,
+                                contentDescription = null,
+                                tint = colors.onAccent,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+
                     Spacer(modifier = Modifier.width(10.dp))
+
                     Text(
                         text = document.fileName,
                         style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
+                        color = colors.onSurface,
                         maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
                     )
                 }
 
-                IconButton(
+                Spacer(modifier = Modifier.width(8.dp))
+
+                NeobrutalistIconButton(
                     onClick = onRemoveClick,
-                    modifier = Modifier.size(28.dp)
+                    containerColor = colors.background,
+                    contentColor = colors.onSurface,
+                    size = 32.dp,
+                    borderWidth = NeobrutalismMetrics.BorderWidthCompact,
+                    shadowOffset = NeobrutalismMetrics.ShadowOffsetCompact,
+                    shape = RoundedCornerShape(NeobrutalismMetrics.CornerRadiusSmall)
                 ) {
                     Icon(
                         imageVector = Icons.Default.Close,
                         contentDescription = "Remove from recents",
-                        modifier = Modifier.size(18.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        modifier = Modifier.size(16.dp)
                     )
                 }
             }
@@ -96,19 +128,18 @@ fun RecentDocumentCard(
             Text(
                 text = "Page ${document.lastReadPageIndex + 1} of ${document.pageCount} • $progressPercent%",
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = colors.subtext,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
 
-            Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
-            LinearProgressIndicator(
-                progress = { document.progressRatio },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(6.dp)
-                    .clip(RoundedCornerShape(3.dp)),
-                color = MaterialTheme.colorScheme.primary,
-                trackColor = MaterialTheme.colorScheme.surface
+            NeobrutalistProgressBar(
+                progress = document.progressRatio,
+                fillColor = colors.accentGreen,
+                trackColor = colors.progressTrack,
+                borderColor = colors.border
             )
         }
     }

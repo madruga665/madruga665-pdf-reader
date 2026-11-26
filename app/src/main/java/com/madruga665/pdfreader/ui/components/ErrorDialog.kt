@@ -1,10 +1,24 @@
 package com.madruga665.pdfreader.ui.components
 
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import com.madruga665.pdfreader.core.model.ReaderErrorState
+import com.madruga665.pdfreader.ui.theme.NeobrutalismMetrics
+import com.madruga665.pdfreader.ui.theme.NeobrutalismTheme
+import com.madruga665.pdfreader.ui.theme.neobrutalistShadow
 
 @Composable
 fun ErrorDialog(
@@ -22,19 +36,66 @@ fun ErrorDialog(
         is ReaderErrorState.None -> return
     }
 
-    AlertDialog(
+    val colors = NeobrutalismTheme.colors
+    val iconShape = RoundedCornerShape(10.dp)
+
+    NeobrutalistDialog(
         onDismissRequest = onDismiss,
-        title = { Text(text = title) },
-        text = { Text(text = description) },
-        confirmButton = {
-            Button(onClick = onRetry) {
-                Text(text = "Choose Another File")
+        icon = {
+            Box(
+                modifier = Modifier.padding(
+                    end = NeobrutalismMetrics.ShadowOffsetCompact,
+                    bottom = NeobrutalismMetrics.ShadowOffsetCompact
+                )
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .neobrutalistShadow(
+                            shadowColor = colors.shadow,
+                            borderColor = colors.border,
+                            borderWidth = NeobrutalismMetrics.BorderWidthCompact,
+                            shadowOffset = NeobrutalismMetrics.ShadowOffsetCompact,
+                            shape = iconShape
+                        )
+                        .background(colors.accentRed, iconShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Warning,
+                        contentDescription = null,
+                        tint = colors.onAccent,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
             }
         },
-        dismissButton = {
-            Button(onClick = onDismiss) {
-                Text(text = "Dismiss")
-            }
+        title = title,
+        actions = {
+            NeobrutalistButton(
+                text = "Dismiss",
+                onClick = onDismiss,
+                containerColor = colors.surface,
+                contentColor = colors.onSurface,
+                borderWidth = NeobrutalismMetrics.BorderWidthCompact,
+                shadowOffset = NeobrutalismMetrics.ShadowOffsetCompact,
+                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp)
+            )
+            NeobrutalistButton(
+                text = "Choose Another File",
+                onClick = onRetry,
+                containerColor = colors.accentYellow,
+                contentColor = colors.onAccent,
+                borderWidth = NeobrutalismMetrics.BorderWidthCompact,
+                shadowOffset = NeobrutalismMetrics.ShadowOffsetCompact,
+                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp)
+            )
         }
-    )
+    ) {
+        Text(
+            text = description,
+            style = MaterialTheme.typography.bodyMedium,
+            color = colors.onSurface
+        )
+    }
 }

@@ -1,10 +1,12 @@
 package com.madruga665.pdfreader.ui.components
 
 import android.net.Uri
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -13,25 +15,28 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.Folder
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.madruga665.pdfreader.core.model.FavoriteFolder
 import com.madruga665.pdfreader.core.model.FolderPdfItem
+import com.madruga665.pdfreader.ui.theme.NeobrutalismFolderAccent
+import com.madruga665.pdfreader.ui.theme.NeobrutalismMetrics
+import com.madruga665.pdfreader.ui.theme.NeobrutalismTheme
+import com.madruga665.pdfreader.ui.theme.neobrutalistShadow
 import java.util.Locale
 
 @Composable
@@ -43,87 +48,125 @@ fun FolderContentsDialog(
     onDismissRequest: () -> Unit,
     onUnpinFolder: () -> Unit
 ) {
-    AlertDialog(
+    val colors = NeobrutalismTheme.colors
+    val folderKey = folder.treeUri.ifBlank { folder.displayName }
+    val accentColor = remember(folderKey, colors) {
+        NeobrutalismFolderAccent.accentForKey(folderKey, colors)
+    }
+    val iconShape = RoundedCornerShape(10.dp)
+    val listShape = RoundedCornerShape(NeobrutalismMetrics.CornerRadiusMedium)
+
+    NeobrutalistDialog(
         onDismissRequest = onDismissRequest,
         icon = {
-            Icon(
-                imageVector = Icons.Default.Folder,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(32.dp)
-            )
-        },
-        title = {
-            Text(
-                text = folder.displayName,
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-        },
-        text = {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = 420.dp)
+            Box(
+                modifier = Modifier.padding(
+                    end = NeobrutalismMetrics.ShadowOffsetCompact,
+                    bottom = NeobrutalismMetrics.ShadowOffsetCompact
+                )
             ) {
-                if (isLoading) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(32.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        CircularProgressIndicator()
-                    }
-                } else if (pdfList.isEmpty()) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(24.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "No PDF files found in this folder.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .neobrutalistShadow(
+                            shadowColor = colors.shadow,
+                            borderColor = colors.border,
+                            borderWidth = NeobrutalismMetrics.BorderWidthCompact,
+                            shadowOffset = NeobrutalismMetrics.ShadowOffsetCompact,
+                            shape = iconShape
                         )
-                    }
-                } else {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        items(pdfList, key = { it.uri }) { pdf ->
-                            FolderPdfListItem(
-                                item = pdf,
-                                onClick = { onPdfClick(Uri.parse(pdf.uri)) }
+                        .background(accentColor, iconShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Folder,
+                        contentDescription = null,
+                        tint = colors.onAccent,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+            }
+        },
+        title = folder.displayName,
+        actions = {
+            NeobrutalistButton(
+                text = "Unpin",
+                onClick = {
+                    onUnpinFolder()
+                    onDismissRequest()
+                },
+                containerColor = colors.accentRed,
+                contentColor = colors.onAccent,
+                borderWidth = NeobrutalismMetrics.BorderWidthCompact,
+                shadowOffset = NeobrutalismMetrics.ShadowOffsetCompact,
+                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp)
+            )
+            NeobrutalistButton(
+                text = "Close",
+                onClick = onDismissRequest,
+                containerColor = colors.surface,
+                contentColor = colors.onSurface,
+                borderWidth = NeobrutalismMetrics.BorderWidthCompact,
+                shadowOffset = NeobrutalismMetrics.ShadowOffsetCompact,
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp)
+            )
+        }
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = 420.dp)
+        ) {
+            if (isLoading) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(32.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(
+                        color = colors.accentYellow,
+                        trackColor = colors.progressTrack
+                    )
+                }
+            } else if (pdfList.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(colors.background, listShape)
+                        .border(NeobrutalismMetrics.BorderWidthCompact, colors.border, listShape)
+                        .padding(24.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "No PDF files found in this folder.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = colors.subtext
+                    )
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(colors.background, listShape)
+                        .border(NeobrutalismMetrics.BorderWidthCompact, colors.border, listShape)
+                ) {
+                    itemsIndexed(pdfList, key = { _, item -> item.uri }) { index, pdf ->
+                        FolderPdfListItem(
+                            item = pdf,
+                            onClick = { onPdfClick(Uri.parse(pdf.uri)) }
+                        )
+                        if (index < pdfList.lastIndex) {
+                            HorizontalDivider(
+                                thickness = 1.5.dp,
+                                color = colors.border
                             )
-                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                         }
                     }
                 }
             }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismissRequest) {
-                Text("Close")
-            }
-        },
-        dismissButton = {
-            TextButton(
-                onClick = {
-                    onUnpinFolder()
-                    onDismissRequest()
-                }
-            ) {
-                Text(
-                    text = "Unpin",
-                    color = MaterialTheme.colorScheme.error
-                )
-            }
         }
-    )
+    }
 }
 
 @Composable
@@ -132,27 +175,38 @@ private fun FolderPdfListItem(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val colors = NeobrutalismTheme.colors
+    val badgeShape = RoundedCornerShape(NeobrutalismMetrics.CornerRadiusSmall)
+
     Row(
         modifier = modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(vertical = 12.dp, horizontal = 4.dp),
+            .padding(vertical = 12.dp, horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(
-            imageVector = Icons.AutoMirrored.Filled.MenuBook,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(24.dp)
-        )
+        Box(
+            modifier = Modifier
+                .size(34.dp)
+                .background(colors.accentBlue, badgeShape)
+                .border(NeobrutalismMetrics.BorderWidthCompact, colors.border, badgeShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.MenuBook,
+                contentDescription = null,
+                tint = colors.onAccent,
+                modifier = Modifier.size(18.dp)
+            )
+        }
 
         Spacer(modifier = Modifier.width(12.dp))
 
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = item.fileName,
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Medium,
+                style = MaterialTheme.typography.titleSmall,
+                color = colors.onSurface,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -161,7 +215,7 @@ private fun FolderPdfListItem(
                 Text(
                     text = formatFileSize(item.fileSizeBytes),
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = colors.subtext
                 )
             }
         }

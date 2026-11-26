@@ -1,6 +1,7 @@
 package com.madruga665.pdfreader.ui.home
 
 import android.net.Uri
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,6 +21,7 @@ import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.Add
@@ -27,14 +29,11 @@ import androidx.compose.material.icons.filled.CreateNewFolder
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.SettingsBackupRestore
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExtendedFloatingActionButton
-import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -45,14 +44,22 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.madruga665.pdfreader.ui.components.BackupActionsDialog
 import com.madruga665.pdfreader.ui.components.FavoriteFolderCard
 import com.madruga665.pdfreader.ui.components.FolderContentsDialog
 import com.madruga665.pdfreader.ui.components.HomeEmptyState
+import com.madruga665.pdfreader.ui.components.NeobrutalistBadge
+import com.madruga665.pdfreader.ui.components.NeobrutalistButton
+import com.madruga665.pdfreader.ui.components.NeobrutalistIconButton
+import com.madruga665.pdfreader.ui.components.NeobrutalistSnackbarHost
 import com.madruga665.pdfreader.ui.components.RecentDocumentCard
 import com.madruga665.pdfreader.ui.components.RestorePreviewDialog
+import com.madruga665.pdfreader.ui.theme.NeobrutalismMetrics
+import com.madruga665.pdfreader.ui.theme.NeobrutalismTheme
+import com.madruga665.pdfreader.ui.theme.neobrutalistGridBackground
+import com.madruga665.pdfreader.ui.theme.neobrutalistShadow
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -66,7 +73,9 @@ fun HomeScreen(
     onImportBackupLauncher: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    val colors = NeobrutalismTheme.colors
     val snackbarHostState = remember { SnackbarHostState() }
+    val brandIconShape = RoundedCornerShape(NeobrutalismMetrics.CornerRadiusSmall)
 
     LaunchedEffect(viewState.errorMessage) {
         viewState.errorMessage?.let { error ->
@@ -77,84 +86,152 @@ fun HomeScreen(
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
+        containerColor = colors.background,
         topBar = {
-            TopAppBar(
-                title = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.MenuBook,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(28.dp)
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Text(
-                            text = "PDF Reader",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                },
-                actions = {
-                    IconButton(onClick = { onIntent(HomeIntent.OpenBackupDialog) }) {
-                        Icon(
-                            imageVector = Icons.Default.SettingsBackupRestore,
-                            contentDescription = "Backup e Restauração"
-                        )
-                    }
-                    IconButton(onClick = onPinFolderLauncher) {
-                        Icon(
-                            imageVector = Icons.Default.CreateNewFolder,
-                            contentDescription = "Pin folder"
-                        )
-                    }
-                    IconButton(onClick = onOpenDocumentLauncher) {
-                        Icon(
-                            imageVector = Icons.Default.FolderOpen,
-                            contentDescription = "Open PDF"
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface
+            Column(modifier = Modifier.fillMaxWidth()) {
+                TopAppBar(
+                    title = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier.padding(
+                                    end = NeobrutalismMetrics.ShadowOffsetCompact,
+                                    bottom = NeobrutalismMetrics.ShadowOffsetCompact
+                                )
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .neobrutalistShadow(
+                                            shadowColor = colors.shadow,
+                                            borderColor = colors.border,
+                                            borderWidth = NeobrutalismMetrics.BorderWidthCompact,
+                                            shadowOffset = NeobrutalismMetrics.ShadowOffsetCompact,
+                                            shape = brandIconShape
+                                        )
+                                        .background(colors.accentYellow, brandIconShape),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Filled.MenuBook,
+                                        contentDescription = null,
+                                        tint = colors.onAccent,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Text(
+                                text = "PDF Reader",
+                                style = MaterialTheme.typography.titleLarge,
+                                color = colors.onSurface,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    },
+                    actions = {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(end = 8.dp)
+                        ) {
+                            NeobrutalistIconButton(
+                                onClick = { onIntent(HomeIntent.OpenBackupDialog) },
+                                containerColor = colors.surface,
+                                contentColor = colors.onSurface
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.SettingsBackupRestore,
+                                    contentDescription = "Backup e Restauração",
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                            NeobrutalistIconButton(
+                                onClick = onPinFolderLauncher,
+                                containerColor = colors.surface,
+                                contentColor = colors.onSurface
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.CreateNewFolder,
+                                    contentDescription = "Pin folder",
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                            NeobrutalistIconButton(
+                                onClick = onOpenDocumentLauncher,
+                                containerColor = colors.accentYellow,
+                                contentColor = colors.onAccent
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.FolderOpen,
+                                    contentDescription = "Open PDF",
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = colors.surface,
+                        titleContentColor = colors.onSurface,
+                        actionIconContentColor = colors.onSurface
+                    )
                 )
-            )
+                HorizontalDivider(
+                    thickness = NeobrutalismMetrics.BorderWidth,
+                    color = colors.border
+                )
+            }
         },
         floatingActionButton = {
             if (!viewState.isEmpty) {
                 if (windowWidthSizeClass == WindowWidthSizeClass.Compact) {
-                    FloatingActionButton(
+                    NeobrutalistIconButton(
                         onClick = onOpenDocumentLauncher,
-                        containerColor = MaterialTheme.colorScheme.primaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                        containerColor = colors.accentYellow,
+                        contentColor = colors.onAccent,
+                        size = 56.dp,
+                        borderWidth = NeobrutalismMetrics.BorderWidth,
+                        shadowOffset = NeobrutalismMetrics.ShadowOffset,
+                        shape = RoundedCornerShape(NeobrutalismMetrics.CornerRadiusLarge)
                     ) {
                         Icon(
                             imageVector = Icons.Default.Add,
-                            contentDescription = "Open PDF"
+                            contentDescription = "Open PDF",
+                            modifier = Modifier.size(26.dp)
                         )
                     }
                 } else {
-                    ExtendedFloatingActionButton(
+                    NeobrutalistButton(
                         onClick = onOpenDocumentLauncher,
-                        icon = {
-                            Icon(
-                                imageVector = Icons.Default.Add,
-                                contentDescription = null
-                            )
-                        },
-                        text = { Text("Open PDF") },
-                        containerColor = MaterialTheme.colorScheme.primaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
+                        containerColor = colors.accentYellow,
+                        contentColor = colors.onAccent,
+                        borderWidth = NeobrutalismMetrics.BorderWidth,
+                        shadowOffset = NeobrutalismMetrics.ShadowOffset,
+                        shape = RoundedCornerShape(NeobrutalismMetrics.CornerRadiusLarge),
+                        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 14.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = null,
+                            modifier = Modifier.size(22.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Open PDF",
+                            style = MaterialTheme.typography.labelLarge
+                        )
+                    }
                 }
             }
         },
-        snackbarHost = { SnackbarHost(snackbarHostState) }
+        snackbarHost = { NeobrutalistSnackbarHost(snackbarHostState) }
     ) { innerPadding ->
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
+                .background(colors.background)
+                .neobrutalistGridBackground(colors.gridLine)
         ) {
             if (viewState.isEmpty) {
                 HomeEmptyState(
@@ -165,23 +242,33 @@ fun HomeScreen(
             } else if (windowWidthSizeClass == WindowWidthSizeClass.Compact) {
                 CompactHomeContent(
                     viewState = viewState,
-                    onIntent = onIntent,
-                    onPinFolderLauncher = onPinFolderLauncher
+                    onIntent = onIntent
                 )
             } else {
                 ExpandedHomeContent(
                     viewState = viewState,
-                    onIntent = onIntent,
-                    onPinFolderLauncher = onPinFolderLauncher
+                    onIntent = onIntent
                 )
             }
 
             if (viewState.isBackupInProgress) {
-                LinearProgressIndicator(
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .align(Alignment.TopCenter)
-                )
+                ) {
+                    LinearProgressIndicator(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(6.dp),
+                        color = colors.accentPurple,
+                        trackColor = colors.progressTrack
+                    )
+                    HorizontalDivider(
+                        thickness = NeobrutalismMetrics.BorderWidthCompact,
+                        color = colors.border
+                    )
+                }
             }
 
             // Dialog for showing PDFs within active pinned folder
@@ -240,26 +327,25 @@ fun HomeScreen(
 private fun CompactHomeContent(
     viewState: HomeViewState,
     onIntent: (HomeIntent) -> Unit,
-    onPinFolderLauncher: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     LazyColumn(
         modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(bottom = 88.dp)
+        contentPadding = PaddingValues(bottom = 96.dp)
     ) {
         if (viewState.recentDocuments.isNotEmpty()) {
             item {
                 SectionHeader(
                     title = "Jump Back In",
                     count = viewState.recentDocuments.size,
-                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 8.dp)
+                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 10.dp)
                 )
             }
 
             item {
                 LazyRow(
                     modifier = Modifier.fillMaxWidth(),
-                    contentPadding = PaddingValues(horizontal = 16.dp),
+                    contentPadding = PaddingValues(start = 16.dp, end = 20.dp, bottom = 4.dp),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     items(viewState.recentDocuments, key = { it.uri }) { recent ->
@@ -271,7 +357,7 @@ private fun CompactHomeContent(
                             onRemoveClick = {
                                 onIntent(HomeIntent.RemoveRecent(recent.uri))
                             },
-                            modifier = Modifier.width(260.dp)
+                            modifier = Modifier.width(264.dp)
                         )
                     }
                 }
@@ -280,11 +366,11 @@ private fun CompactHomeContent(
 
         if (viewState.favoriteFolders.isNotEmpty()) {
             item {
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(22.dp))
                 SectionHeader(
                     title = "Favorite Folders",
                     count = viewState.favoriteFolders.size,
-                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp)
+                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 10.dp)
                 )
             }
 
@@ -310,7 +396,6 @@ private fun CompactHomeContent(
 private fun ExpandedHomeContent(
     viewState: HomeViewState,
     onIntent: (HomeIntent) -> Unit,
-    onPinFolderLauncher: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     LazyVerticalGrid(
@@ -325,13 +410,14 @@ private fun ExpandedHomeContent(
                 SectionHeader(
                     title = "Jump Back In",
                     count = viewState.recentDocuments.size,
-                    modifier = Modifier.padding(bottom = 8.dp)
+                    modifier = Modifier.padding(bottom = 4.dp)
                 )
             }
 
             item(span = { GridItemSpan(maxLineSpan) }) {
                 LazyRow(
                     modifier = Modifier.fillMaxWidth(),
+                    contentPadding = PaddingValues(end = 6.dp, bottom = 4.dp),
                     horizontalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     items(viewState.recentDocuments, key = { it.uri }) { recent ->
@@ -343,7 +429,7 @@ private fun ExpandedHomeContent(
                             onRemoveClick = {
                                 onIntent(HomeIntent.RemoveRecent(recent.uri))
                             },
-                            modifier = Modifier.width(280.dp)
+                            modifier = Modifier.width(284.dp)
                         )
                     }
                 }
@@ -352,11 +438,11 @@ private fun ExpandedHomeContent(
 
         if (viewState.favoriteFolders.isNotEmpty()) {
             item(span = { GridItemSpan(maxLineSpan) }) {
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(12.dp))
                 SectionHeader(
                     title = "Favorite Folders",
                     count = viewState.favoriteFolders.size,
-                    modifier = Modifier.padding(bottom = 8.dp)
+                    modifier = Modifier.padding(bottom = 4.dp)
                 )
             }
 
@@ -381,6 +467,7 @@ private fun SectionHeader(
     count: Int,
     modifier: Modifier = Modifier
 ) {
+    val colors = NeobrutalismTheme.colors
     Row(
         modifier = modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
@@ -389,14 +476,15 @@ private fun SectionHeader(
         Text(
             text = title,
             style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurface
+            color = colors.onSurface
         )
 
-        Text(
+        NeobrutalistBadge(
             text = "$count",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            containerColor = colors.accentBlue,
+            contentColor = colors.onAccent,
+            borderWidth = NeobrutalismMetrics.BorderWidthCompact,
+            shadowOffset = NeobrutalismMetrics.ShadowOffsetCompact
         )
     }
 }

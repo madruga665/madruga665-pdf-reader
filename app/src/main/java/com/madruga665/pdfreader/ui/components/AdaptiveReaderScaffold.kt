@@ -1,13 +1,22 @@
 package com.madruga665.pdfreader.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.FileOpen
@@ -15,23 +24,26 @@ import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationRail
-import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.madruga665.pdfreader.core.engine.AutoScrollEngine
 import com.madruga665.pdfreader.core.repository.PdfDocumentRepository
 import com.madruga665.pdfreader.ui.reader.ReaderIntent
 import com.madruga665.pdfreader.ui.reader.ReaderViewState
+import com.madruga665.pdfreader.ui.theme.NeobrutalismMetrics
+import com.madruga665.pdfreader.ui.theme.NeobrutalismTheme
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -45,41 +57,77 @@ fun AdaptiveReaderScaffold(
     onNavigateBack: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
+    val colors = NeobrutalismTheme.colors
     val isExpanded = windowWidthSizeClass == WindowWidthSizeClass.Expanded
 
     Scaffold(
+        containerColor = colors.readerViewportBackground,
         topBar = {
-            TopAppBar(
-                navigationIcon = {
-                    if (onNavigateBack != null) {
-                        IconButton(onClick = onNavigateBack) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = "Back to library"
-                            )
+            Column(modifier = Modifier.fillMaxWidth()) {
+                TopAppBar(
+                    navigationIcon = {
+                        if (onNavigateBack != null) {
+                            NeobrutalistIconButton(
+                                onClick = onNavigateBack,
+                                containerColor = colors.surface,
+                                contentColor = colors.onSurface,
+                                modifier = Modifier.padding(start = 8.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                    contentDescription = "Back to library",
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
                         }
-                    }
-                },
-                title = {
-                    Text(
-                        text = viewState.document?.fileName ?: "PDF Reader",
-                        style = MaterialTheme.typography.titleLarge,
-                        maxLines = 1
-                    )
-                },
-                actions = {
-                    if (viewState.totalPages > 0) {
+                    },
+                    title = {
                         Text(
-                            text = "Page ${viewState.currentPageIndex + 1} of ${viewState.totalPages}",
-                            style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier.padding(end = 12.dp)
+                            text = viewState.document?.fileName ?: "PDF Reader",
+                            style = MaterialTheme.typography.titleLarge,
+                            color = colors.onSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
-                    }
-                    IconButton(onClick = onOpenFilePicker) {
-                        Icon(Icons.Default.FileOpen, contentDescription = "Open PDF")
-                    }
-                }
-            )
+                    },
+                    actions = {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.padding(end = 8.dp)
+                        ) {
+                            if (viewState.totalPages > 0) {
+                                NeobrutalistBadge(
+                                    text = "Page ${viewState.currentPageIndex + 1} of ${viewState.totalPages}",
+                                    containerColor = colors.accentBlue,
+                                    contentColor = colors.onAccent
+                                )
+                            }
+                            NeobrutalistIconButton(
+                                onClick = onOpenFilePicker,
+                                containerColor = colors.accentYellow,
+                                contentColor = colors.onAccent
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.FileOpen,
+                                    contentDescription = "Open PDF",
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = colors.surface,
+                        titleContentColor = colors.onSurface,
+                        navigationIconContentColor = colors.onSurface,
+                        actionIconContentColor = colors.onSurface
+                    )
+                )
+                HorizontalDivider(
+                    thickness = NeobrutalismMetrics.BorderWidth,
+                    color = colors.border
+                )
+            }
         },
         modifier = modifier.fillMaxSize()
     ) { innerPadding ->
@@ -87,47 +135,87 @@ fun AdaptiveReaderScaffold(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
+                .background(colors.readerViewportBackground)
         ) {
             if (viewState.isLoading) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator()
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    NeobrutalistCard(
+                        modifier = Modifier
+                            .widthIn(max = 140.dp)
+                            .padding(24.dp),
+                        containerColor = colors.surface,
+                        shape = RoundedCornerShape(NeobrutalismMetrics.CornerRadiusLarge)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(28.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator(
+                                color = colors.accentYellow,
+                                trackColor = colors.progressTrack
+                            )
+                        }
+                    }
                 }
             } else if (viewState.document != null) {
                 if (isExpanded) {
-                    // Tablet / Desktop layout with Side Rail
+                    // Tablet / Desktop layout with dedicated opaque Neo-Brutalism side panel
                     Row(modifier = Modifier.fillMaxSize()) {
-                        NavigationRail(
-                            modifier = Modifier.fillMaxHeight(),
-                            header = {
-                                IconButton(onClick = { onIntent(ReaderIntent.ToggleAutoScroll) }) {
-                                    Icon(
-                                        imageVector = if (viewState.isAutoScrolling) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                        contentDescription = "Toggle Auto-Scroll"
-                                    )
-                                }
-                            }
+                        Column(
+                            modifier = Modifier
+                                .width(NeobrutalismMetrics.ExpandedReaderRailWidth)
+                                .fillMaxHeight()
+                                .background(colors.surface)
+                                .verticalScroll(rememberScrollState())
+                                .padding(16.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(14.dp)
                         ) {
-                            Column(
-                                modifier = Modifier
-                                    .padding(8.dp)
-                                    .widthIn(max = 240.dp)
+                            NeobrutalistIconButton(
+                                onClick = { onIntent(ReaderIntent.ToggleAutoScroll) },
+                                containerColor = if (viewState.isAutoScrolling) colors.accentOrange else colors.accentYellow,
+                                contentColor = colors.onAccent,
+                                size = 56.dp,
+                                borderWidth = NeobrutalismMetrics.BorderWidth,
+                                shadowOffset = NeobrutalismMetrics.ShadowOffset,
+                                shape = RoundedCornerShape(NeobrutalismMetrics.CornerRadiusMedium)
                             ) {
-                                SpeedSelectorControl(
-                                    currentSpeedPxPerSec = viewState.currentSpeedPxPerSec,
-                                    activePreset = viewState.activePreset,
-                                    onSpeedChange = { onIntent(ReaderIntent.SetSpeed(it)) },
-                                    onPresetSelect = { onIntent(ReaderIntent.SelectPreset(it)) },
-                                    savedSpeedPxPerSec = viewState.documentSavedSpeedPxPerSec,
-                                    onSaveCurrentSpeedAsDefault = { onIntent(ReaderIntent.SaveCurrentSpeedAsDocumentDefault) },
-                                    onResetSpeedToDefault = { onIntent(ReaderIntent.ResetDocumentSpeedToDefault) }
+                                Icon(
+                                    imageVector = if (viewState.isAutoScrolling) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                    contentDescription = "Toggle Auto-Scroll",
+                                    modifier = Modifier.size(28.dp)
                                 )
                             }
+
+                            SpeedSelectorControl(
+                                currentSpeedPxPerSec = viewState.currentSpeedPxPerSec,
+                                activePreset = viewState.activePreset,
+                                onSpeedChange = { onIntent(ReaderIntent.SetSpeed(it)) },
+                                onPresetSelect = { onIntent(ReaderIntent.SelectPreset(it)) },
+                                savedSpeedPxPerSec = viewState.documentSavedSpeedPxPerSec,
+                                onSaveCurrentSpeedAsDefault = { onIntent(ReaderIntent.SaveCurrentSpeedAsDocumentDefault) },
+                                onResetSpeedToDefault = { onIntent(ReaderIntent.ResetDocumentSpeedToDefault) }
+                            )
                         }
+
+                        // Solid vertical divider separating controls from PDF viewport
+                        Box(
+                            modifier = Modifier
+                                .width(NeobrutalismMetrics.BorderWidth)
+                                .fillMaxHeight()
+                                .background(colors.border)
+                        )
 
                         Box(
                             modifier = Modifier
-                                .fillMaxSize()
-                                .background(MaterialTheme.colorScheme.surfaceVariant),
+                                .weight(1f)
+                                .fillMaxHeight()
+                                .background(colors.readerViewportBackground),
                             contentAlignment = Alignment.Center
                         ) {
                             PdfDocumentViewport(
@@ -145,7 +233,11 @@ fun AdaptiveReaderScaffold(
                     }
                 } else {
                     // Phone / Compact layout
-                    Box(modifier = Modifier.fillMaxSize()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(colors.readerViewportBackground)
+                    ) {
                         PdfDocumentViewport(
                             document = viewState.document,
                             repository = repository,
@@ -173,22 +265,39 @@ fun AdaptiveReaderScaffold(
                     }
                 }
             } else {
-                // Empty state
+                // Empty state in Neo-Brutalism card
                 Box(
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(24.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(
-                            text = "No PDF document opened",
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Text(
-                            text = "Tap the folder icon above to open a PDF",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                    NeobrutalistCard(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .widthIn(max = 380.dp),
+                        containerColor = colors.surface
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(24.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                text = "No PDF document opened",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = colors.onSurface,
+                                textAlign = TextAlign.Center
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = "Tap the folder icon above to open a PDF",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = colors.subtext,
+                                textAlign = TextAlign.Center
+                            )
+                        }
                     }
                 }
             }
