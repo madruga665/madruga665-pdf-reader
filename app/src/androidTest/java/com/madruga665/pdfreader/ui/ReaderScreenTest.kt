@@ -4,14 +4,18 @@ import android.graphics.Bitmap
 import android.net.Uri
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotSelected
+import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import com.madruga665.pdfreader.core.engine.DefaultAutoScrollEngine
 import com.madruga665.pdfreader.core.model.PdfDocument
+import com.madruga665.pdfreader.core.model.SpeedPreset
 import com.madruga665.pdfreader.core.repository.PdfDocumentRepository
 import com.madruga665.pdfreader.ui.components.AdaptiveReaderScaffold
+import com.madruga665.pdfreader.ui.components.SpeedSelectorControl
 import com.madruga665.pdfreader.ui.reader.ReaderViewState
 import com.madruga665.pdfreader.ui.theme.PdfReaderTheme
 import org.junit.Rule
@@ -112,5 +116,23 @@ class ReaderScreenTest {
 
         composeTestRule.onNodeWithText("No PDF document opened").assertIsDisplayed()
         composeTestRule.onNodeWithContentDescription("Open PDF").assertIsDisplayed()
+    }
+
+    @Test
+    fun speedSelectorControl_exposesSelectedSemanticsOnPresetChips() {
+        composeTestRule.setContent {
+            PdfReaderTheme(darkTheme = false) {
+                SpeedSelectorControl(
+                    currentSpeedPxPerSec = SpeedPreset.MEDIUM.speedPxPerSec,
+                    activePreset = SpeedPreset.MEDIUM,
+                    onSpeedChange = {},
+                    onPresetSelect = {}
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText(SpeedPreset.SLOW.displayLabel).assertIsNotSelected()
+        composeTestRule.onNodeWithText(SpeedPreset.MEDIUM.displayLabel).assertIsSelected()
+        composeTestRule.onNodeWithText(SpeedPreset.FAST.displayLabel).assertIsNotSelected()
     }
 }

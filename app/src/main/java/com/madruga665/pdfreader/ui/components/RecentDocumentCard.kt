@@ -1,8 +1,6 @@
 package com.madruga665.pdfreader.ui.components
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -26,7 +24,6 @@ import androidx.compose.ui.unit.dp
 import com.madruga665.pdfreader.core.model.RecentDocument
 import com.madruga665.pdfreader.ui.theme.NeobrutalismMetrics
 import com.madruga665.pdfreader.ui.theme.NeobrutalismTheme
-import com.madruga665.pdfreader.ui.theme.neobrutalistShadow
 import kotlin.math.roundToInt
 
 @Composable
@@ -63,33 +60,13 @@ fun RecentDocumentCard(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.weight(1f)
                 ) {
-                    Box(
-                        modifier = Modifier.padding(
-                            end = NeobrutalismMetrics.ShadowOffsetCompact,
-                            bottom = NeobrutalismMetrics.ShadowOffsetCompact
-                        )
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(38.dp)
-                                .neobrutalistShadow(
-                                    shadowColor = colors.shadow,
-                                    borderColor = colors.border,
-                                    borderWidth = NeobrutalismMetrics.BorderWidthCompact,
-                                    shadowOffset = NeobrutalismMetrics.ShadowOffsetCompact,
-                                    shape = iconBoxShape
-                                )
-                                .background(colors.accentRed, iconBoxShape),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.PictureAsPdf,
-                                contentDescription = null,
-                                tint = colors.onAccent,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-                    }
+                    NeobrutalistIconBox(
+                        icon = Icons.Default.PictureAsPdf,
+                        containerColor = colors.accentRed,
+                        boxSize = 38.dp,
+                        iconSize = 20.dp,
+                        shape = iconBoxShape
+                    )
 
                     Spacer(modifier = Modifier.width(10.dp))
 

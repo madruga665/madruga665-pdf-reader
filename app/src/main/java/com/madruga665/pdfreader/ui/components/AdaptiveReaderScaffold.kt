@@ -3,6 +3,7 @@ package com.madruga665.pdfreader.ui.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -10,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -144,8 +146,8 @@ fun AdaptiveReaderScaffold(
                 ) {
                     NeobrutalistCard(
                         modifier = Modifier
-                            .widthIn(max = 140.dp)
-                            .padding(24.dp),
+                            .padding(24.dp)
+                            .widthIn(max = 140.dp),
                         containerColor = colors.surface,
                         shape = RoundedCornerShape(NeobrutalismMetrics.CornerRadiusLarge)
                     ) {
@@ -156,8 +158,7 @@ fun AdaptiveReaderScaffold(
                             contentAlignment = Alignment.Center
                         ) {
                             CircularProgressIndicator(
-                                color = colors.accentYellow,
-                                trackColor = colors.progressTrack
+                                color = MaterialTheme.colorScheme.primary
                             )
                         }
                     }
@@ -233,7 +234,7 @@ fun AdaptiveReaderScaffold(
                     }
                 } else {
                     // Phone / Compact layout
-                    Box(
+                    BoxWithConstraints(
                         modifier = Modifier
                             .fillMaxSize()
                             .background(colors.readerViewportBackground)
@@ -260,7 +261,10 @@ fun AdaptiveReaderScaffold(
                             savedSpeedPxPerSec = viewState.documentSavedSpeedPxPerSec,
                             onSaveCurrentSpeedAsDefault = { onIntent(ReaderIntent.SaveCurrentSpeedAsDocumentDefault) },
                             onResetSpeedToDefault = { onIntent(ReaderIntent.ResetDocumentSpeedToDefault) },
-                            modifier = Modifier.align(Alignment.BottomCenter)
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .widthIn(max = 480.dp)
+                                .heightIn(max = maxHeight * 0.62f)
                         )
                     }
                 }

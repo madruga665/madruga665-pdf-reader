@@ -3,6 +3,7 @@ package com.madruga665.pdfreader.ui.theme
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
+import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
@@ -14,6 +15,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
@@ -31,36 +33,10 @@ object NeobrutalismTheme {
         get() = MaterialTheme.typography
 }
 
-private fun NeobrutalismColors.toMaterialColorScheme(): ColorScheme = if (isDark) {
-    darkColorScheme(
-        primary = accentYellow,
-        onPrimary = onAccent,
-        primaryContainer = accentYellow,
-        onPrimaryContainer = onAccent,
-        secondary = accentPurple,
-        onSecondary = onAccent,
-        secondaryContainer = accentBlue,
-        onSecondaryContainer = onAccent,
-        tertiary = accentOrange,
-        onTertiary = onAccent,
-        tertiaryContainer = accentGreen,
-        onTertiaryContainer = onAccent,
-        background = background,
-        onBackground = onSurface,
-        surface = surface,
-        onSurface = onSurface,
-        surfaceVariant = progressTrack,
-        onSurfaceVariant = subtext,
-        outline = border,
-        outlineVariant = border,
-        error = errorText,
-        onError = onAccent,
-        errorContainer = accentRed,
-        onErrorContainer = onAccent
-    )
-} else {
-    lightColorScheme(
-        primary = accentYellow,
+private fun NeobrutalismColors.toMaterialColorScheme(): ColorScheme {
+    val base = if (isDark) darkColorScheme() else lightColorScheme()
+    return base.copy(
+        primary = if (isDark) accentYellow else accentPurple,
         onPrimary = onAccent,
         primaryContainer = accentYellow,
         onPrimaryContainer = onAccent,
@@ -105,6 +81,16 @@ fun PdfReaderTheme(
     if (!view.isInEditMode) {
         SideEffect {
             val window = view.context.findActivity()?.window ?: return@SideEffect
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.VANILLA_ICE_CREAM) {
+                @Suppress("DEPRECATION")
+                window.statusBarColor = neoColors.surface.toArgb()
+                @Suppress("DEPRECATION")
+                window.navigationBarColor = if (!darkTheme && Build.VERSION.SDK_INT < Build.VERSION_CODES.O_MR1) {
+                    neoColors.border.toArgb()
+                } else {
+                    neoColors.background.toArgb()
+                }
+            }
             val insetsController = WindowCompat.getInsetsController(window, view)
             insetsController.isAppearanceLightStatusBars = !darkTheme
             insetsController.isAppearanceLightNavigationBars = !darkTheme

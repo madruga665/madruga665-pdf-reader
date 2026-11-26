@@ -96,33 +96,13 @@ fun FavoriteFolderCard(
                     modifier = Modifier.weight(1f),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Box(
-                        modifier = Modifier.padding(
-                            end = NeobrutalismMetrics.ShadowOffsetCompact,
-                            bottom = NeobrutalismMetrics.ShadowOffsetCompact
-                        )
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(46.dp)
-                                .neobrutalistShadow(
-                                    shadowColor = colors.shadow,
-                                    borderColor = colors.border,
-                                    borderWidth = NeobrutalismMetrics.BorderWidthCompact,
-                                    shadowOffset = NeobrutalismMetrics.ShadowOffsetCompact,
-                                    shape = iconShape
-                                )
-                                .background(accentColor, iconShape),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Folder,
-                                contentDescription = null,
-                                tint = colors.onAccent,
-                                modifier = Modifier.size(26.dp)
-                            )
-                        }
-                    }
+                    NeobrutalistIconBox(
+                        icon = Icons.Default.Folder,
+                        containerColor = accentColor,
+                        boxSize = 46.dp,
+                        iconSize = 26.dp,
+                        shape = iconShape
+                    )
 
                     Spacer(modifier = Modifier.width(14.dp))
 

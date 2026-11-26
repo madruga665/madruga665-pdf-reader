@@ -54,33 +54,13 @@ fun BackupActionsDialog(
     NeobrutalistDialog(
         onDismissRequest = onDismiss,
         icon = {
-            Box(
-                modifier = Modifier.padding(
-                    end = NeobrutalismMetrics.ShadowOffsetCompact,
-                    bottom = NeobrutalismMetrics.ShadowOffsetCompact
-                )
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(40.dp)
-                        .neobrutalistShadow(
-                            shadowColor = colors.shadow,
-                            borderColor = colors.border,
-                            borderWidth = NeobrutalismMetrics.BorderWidthCompact,
-                            shadowOffset = NeobrutalismMetrics.ShadowOffsetCompact,
-                            shape = iconShape
-                        )
-                        .background(colors.accentBlue, iconShape),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.SettingsBackupRestore,
-                        contentDescription = null,
-                        tint = colors.onAccent,
-                        modifier = Modifier.size(22.dp)
-                    )
-                }
-            }
+            NeobrutalistIconBox(
+                icon = Icons.Default.SettingsBackupRestore,
+                containerColor = colors.accentBlue,
+                boxSize = 40.dp,
+                iconSize = 22.dp,
+                shape = iconShape
+            )
         },
         title = "Backup e Restauração",
         actions = {

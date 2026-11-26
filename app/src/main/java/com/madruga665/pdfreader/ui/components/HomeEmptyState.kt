@@ -1,6 +1,5 @@
 package com.madruga665.pdfreader.ui.components
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -30,7 +29,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.madruga665.pdfreader.ui.theme.NeobrutalismMetrics
 import com.madruga665.pdfreader.ui.theme.NeobrutalismTheme
-import com.madruga665.pdfreader.ui.theme.neobrutalistShadow
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -65,30 +63,15 @@ fun HomeEmptyState(
                     .padding(24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Box(
-                    modifier = Modifier.padding(end = 3.dp, bottom = 3.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(72.dp)
-                            .neobrutalistShadow(
-                                shadowColor = colors.shadow,
-                                borderColor = colors.border,
-                                borderWidth = NeobrutalismMetrics.BorderWidth,
-                                shadowOffset = 3.dp,
-                                shape = iconShape
-                            )
-                            .background(colors.accentYellow, iconShape),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.MenuBook,
-                            contentDescription = null,
-                            tint = colors.onAccent,
-                            modifier = Modifier.size(38.dp)
-                        )
-                    }
-                }
+                NeobrutalistIconBox(
+                    icon = Icons.AutoMirrored.Filled.MenuBook,
+                    containerColor = colors.accentYellow,
+                    boxSize = 72.dp,
+                    iconSize = 38.dp,
+                    borderWidth = NeobrutalismMetrics.BorderWidth,
+                    shadowOffset = 3.dp,
+                    shape = iconShape
+                )
 
                 Spacer(modifier = Modifier.height(18.dp))
 

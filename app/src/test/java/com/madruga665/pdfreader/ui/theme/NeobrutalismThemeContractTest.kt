@@ -166,6 +166,32 @@ class NeobrutalismThemeContractTest {
         }
     }
 
+    @Test
+    fun wcag22AA_graphicControlsAndIndicatorsMeetMinimum3To1() {
+        listOf(
+            "Light" to LightNeobrutalismColors,
+            "MochaDark" to MochaDarkNeobrutalismColors
+        ).forEach { (themeName, c) ->
+            val loadingIndicator = if (c.isDark) c.accentYellow else c.accentPurple
+            val sliderThumbEdge = if (c.isDark) c.accentYellow else c.border
+            val graphicPairs = listOf(
+                "slider activeTrack (accentPurple) / surface" to (c.accentPurple to c.surface),
+                "slider inactiveTrack (subtext) / surface" to (c.subtext to c.surface),
+                "loadingIndicator / surface" to (loadingIndicator to c.surface),
+                "loadingIndicator / readerViewportBackground" to (loadingIndicator to c.readerViewportBackground),
+                "slider thumb/border / surface" to (sliderThumbEdge to c.surface)
+            )
+
+            graphicPairs.forEach { (pairName, colors) ->
+                val ratio = contrastRatio(colors.first, colors.second)
+                assertTrue(
+                    "$themeName $pairName contrast ratio %.2f is below WCAG 2.2 AA graphic minimum (3.0:1)".format(ratio),
+                    ratio >= 3.0
+                )
+            }
+        }
+    }
+
     private fun contrastRatio(foreground: Color, background: Color): Double {
         val lum1 = relativeLuminance(foreground)
         val lum2 = relativeLuminance(background)

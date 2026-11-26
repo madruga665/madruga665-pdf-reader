@@ -45,6 +45,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
@@ -54,6 +56,93 @@ import androidx.compose.ui.window.DialogProperties
 import com.madruga665.pdfreader.ui.theme.NeobrutalismMetrics
 import com.madruga665.pdfreader.ui.theme.NeobrutalismTheme
 import com.madruga665.pdfreader.ui.theme.neobrutalistShadow
+
+private data class TactilePressState(
+    val interactionSource: MutableInteractionSource,
+    val animatedShadow: Dp,
+    val animatedTranslation: Dp
+)
+
+@Composable
+private fun rememberTactilePressState(
+    shadowOffset: Dp,
+    enabled: Boolean,
+    interactive: Boolean = true,
+    labelPrefix: String
+): TactilePressState {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+
+    val pressedOffset = NeobrutalismMetrics.PressedShadowOffset.coerceAtMost(shadowOffset)
+    val targetShadow = when {
+        !enabled -> 0.dp
+        interactive && isPressed -> pressedOffset
+        else -> shadowOffset
+    }
+    val targetTranslation = when {
+        !enabled -> 0.dp
+        interactive && isPressed -> (shadowOffset - pressedOffset).coerceAtLeast(0.dp)
+        else -> 0.dp
+    }
+
+    val animatedShadow by animateDpAsState(
+        targetValue = targetShadow,
+        animationSpec = tween(durationMillis = 75),
+        label = "${labelPrefix}Shadow"
+    )
+    val animatedTranslation by animateDpAsState(
+        targetValue = targetTranslation,
+        animationSpec = tween(durationMillis = 75),
+        label = "${labelPrefix}Offset"
+    )
+
+    return TactilePressState(
+        interactionSource = interactionSource,
+        animatedShadow = animatedShadow,
+        animatedTranslation = animatedTranslation
+    )
+}
+
+@Composable
+fun NeobrutalistIconBox(
+    icon: ImageVector,
+    containerColor: Color,
+    modifier: Modifier = Modifier,
+    contentColor: Color = NeobrutalismTheme.colors.onAccent,
+    borderColor: Color = NeobrutalismTheme.colors.border,
+    shadowColor: Color = NeobrutalismTheme.colors.shadow,
+    boxSize: Dp = 40.dp,
+    iconSize: Dp = 22.dp,
+    borderWidth: Dp = NeobrutalismMetrics.BorderWidthCompact,
+    shadowOffset: Dp = NeobrutalismMetrics.ShadowOffsetCompact,
+    shape: Shape = RoundedCornerShape(10.dp),
+    contentDescription: String? = null
+) {
+    Box(
+        modifier = modifier.padding(end = shadowOffset, bottom = shadowOffset)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(boxSize)
+                .neobrutalistShadow(
+                    shadowColor = shadowColor,
+                    borderColor = borderColor,
+                    borderWidth = borderWidth,
+                    shadowOffset = shadowOffset,
+                    shape = shape
+                )
+                .background(containerColor, shape),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = contentDescription,
+                tint = contentColor,
+                modifier = Modifier.size(iconSize)
+            )
+        }
+    }
+}
 
 @Composable
 fun NeobrutalistButton(
@@ -68,7 +157,8 @@ fun NeobrutalistButton(
     borderWidth: Dp = NeobrutalismMetrics.BorderWidth,
     shadowOffset: Dp = NeobrutalismMetrics.ShadowOffset,
     contentPadding: PaddingValues = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-    enabled: Boolean = true
+    enabled: Boolean = true,
+    selected: Boolean? = null
 ) {
     NeobrutalistButton(
         onClick = onClick,
@@ -81,7 +171,8 @@ fun NeobrutalistButton(
         borderWidth = borderWidth,
         shadowOffset = shadowOffset,
         contentPadding = contentPadding,
-        enabled = enabled
+        enabled = enabled,
+        selected = selected
     ) {
         Text(
             text = text,
@@ -105,32 +196,13 @@ fun NeobrutalistButton(
     shadowOffset: Dp = NeobrutalismMetrics.ShadowOffset,
     contentPadding: PaddingValues = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
     enabled: Boolean = true,
+    selected: Boolean? = null,
     content: @Composable RowScope.() -> Unit
 ) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-
-    val pressedOffset = NeobrutalismMetrics.PressedShadowOffset.coerceAtMost(shadowOffset)
-    val targetShadow = when {
-        !enabled -> 0.dp
-        isPressed -> pressedOffset
-        else -> shadowOffset
-    }
-    val targetTranslation = when {
-        !enabled -> 0.dp
-        isPressed -> (shadowOffset - pressedOffset).coerceAtLeast(0.dp)
-        else -> 0.dp
-    }
-
-    val animatedShadow by animateDpAsState(
-        targetValue = targetShadow,
-        animationSpec = tween(durationMillis = 75),
-        label = "neoButtonShadow"
-    )
-    val animatedTranslation by animateDpAsState(
-        targetValue = targetTranslation,
-        animationSpec = tween(durationMillis = 75),
-        label = "neoButtonOffset"
+    val pressState = rememberTactilePressState(
+        shadowOffset = shadowOffset,
+        enabled = enabled,
+        labelPrefix = "neoButton"
     )
 
     val effectiveContainer = if (enabled) containerColor else NeobrutalismTheme.colors.progressTrack
@@ -143,19 +215,26 @@ fun NeobrutalistButton(
         Row(
             modifier = Modifier
                 .offset {
-                    val px = animatedTranslation.roundToPx()
+                    val px = pressState.animatedTranslation.roundToPx()
                     IntOffset(px, px)
                 }
                 .neobrutalistShadow(
                     shadowColor = shadowColor,
                     borderColor = borderColor,
                     borderWidth = borderWidth,
-                    shadowOffset = animatedShadow,
+                    shadowOffset = pressState.animatedShadow,
                     shape = shape
                 )
                 .background(effectiveContainer, shape)
+                .then(
+                    if (selected != null) {
+                        Modifier.semantics { this.selected = selected }
+                    } else {
+                        Modifier
+                    }
+                )
                 .clickable(
-                    interactionSource = interactionSource,
+                    interactionSource = pressState.interactionSource,
                     indication = null,
                     enabled = enabled,
                     role = Role.Button,
@@ -187,30 +266,10 @@ fun NeobrutalistIconButton(
     enabled: Boolean = true,
     content: @Composable () -> Unit
 ) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-
-    val pressedOffset = NeobrutalismMetrics.PressedShadowOffset.coerceAtMost(shadowOffset)
-    val targetShadow = when {
-        !enabled -> 0.dp
-        isPressed -> pressedOffset
-        else -> shadowOffset
-    }
-    val targetTranslation = when {
-        !enabled -> 0.dp
-        isPressed -> (shadowOffset - pressedOffset).coerceAtLeast(0.dp)
-        else -> 0.dp
-    }
-
-    val animatedShadow by animateDpAsState(
-        targetValue = targetShadow,
-        animationSpec = tween(durationMillis = 75),
-        label = "neoIconBtnShadow"
-    )
-    val animatedTranslation by animateDpAsState(
-        targetValue = targetTranslation,
-        animationSpec = tween(durationMillis = 75),
-        label = "neoIconBtnOffset"
+    val pressState = rememberTactilePressState(
+        shadowOffset = shadowOffset,
+        enabled = enabled,
+        labelPrefix = "neoIconBtn"
     )
 
     val effectiveContainer = if (enabled) containerColor else NeobrutalismTheme.colors.progressTrack
@@ -223,19 +282,19 @@ fun NeobrutalistIconButton(
             modifier = Modifier
                 .size(size)
                 .offset {
-                    val px = animatedTranslation.roundToPx()
+                    val px = pressState.animatedTranslation.roundToPx()
                     IntOffset(px, px)
                 }
                 .neobrutalistShadow(
                     shadowColor = shadowColor,
                     borderColor = borderColor,
                     borderWidth = borderWidth,
-                    shadowOffset = animatedShadow,
+                    shadowOffset = pressState.animatedShadow,
                     shape = shape
                 )
                 .background(effectiveContainer, shape)
                 .clickable(
-                    interactionSource = interactionSource,
+                    interactionSource = pressState.interactionSource,
                     indication = null,
                     enabled = enabled,
                     role = Role.Button,
@@ -311,23 +370,11 @@ fun NeobrutalistCard(
     onClick: (() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit
 ) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-
-    val pressedOffset = NeobrutalismMetrics.PressedShadowOffset.coerceAtMost(shadowOffset)
-    val animatedShadow by animateDpAsState(
-        targetValue = if (onClick != null && isPressed) pressedOffset else shadowOffset,
-        animationSpec = tween(durationMillis = 75),
-        label = "neoCardShadow"
-    )
-    val animatedTranslation by animateDpAsState(
-        targetValue = if (onClick != null && isPressed) {
-            (shadowOffset - pressedOffset).coerceAtLeast(0.dp)
-        } else {
-            0.dp
-        },
-        animationSpec = tween(durationMillis = 75),
-        label = "neoCardOffset"
+    val pressState = rememberTactilePressState(
+        shadowOffset = shadowOffset,
+        enabled = true,
+        interactive = onClick != null,
+        labelPrefix = "neoCard"
     )
 
     Box(
@@ -337,21 +384,21 @@ fun NeobrutalistCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .offset {
-                    val px = animatedTranslation.roundToPx()
+                    val px = pressState.animatedTranslation.roundToPx()
                     IntOffset(px, px)
                 }
                 .neobrutalistShadow(
                     shadowColor = shadowColor,
                     borderColor = borderColor,
                     borderWidth = borderWidth,
-                    shadowOffset = animatedShadow,
+                    shadowOffset = pressState.animatedShadow,
                     shape = shape
                 )
                 .background(containerColor, shape)
                 .then(
                     if (onClick != null) {
                         Modifier.clickable(
-                            interactionSource = interactionSource,
+                            interactionSource = pressState.interactionSource,
                             indication = null,
                             onClick = onClick
                         )
@@ -383,7 +430,7 @@ fun NeobrutalistDialog(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(24.dp),
+                .padding(horizontal = 24.dp, vertical = 16.dp),
             contentAlignment = Alignment.Center
         ) {
             NeobrutalistCard(
@@ -427,7 +474,13 @@ fun NeobrutalistDialog(
                     )
                     Spacer(modifier = Modifier.height(14.dp))
 
-                    content()
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f, fill = false)
+                    ) {
+                        content()
+                    }
 
                     Spacer(modifier = Modifier.height(18.dp))
 

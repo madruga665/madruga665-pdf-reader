@@ -1,6 +1,9 @@
 package com.madruga665.pdfreader.ui.components
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -12,12 +15,14 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Save
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -34,7 +39,7 @@ import com.madruga665.pdfreader.ui.theme.NeobrutalismMetrics
 import com.madruga665.pdfreader.ui.theme.NeobrutalismTheme
 import kotlin.math.roundToInt
 
-@OptIn(ExperimentalLayoutApi::class)
+@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun SpeedSelectorControl(
     currentSpeedPxPerSec: Float,
@@ -70,7 +75,8 @@ fun SpeedSelectorControl(
                     borderWidth = NeobrutalismMetrics.BorderWidthCompact,
                     shadowOffset = NeobrutalismMetrics.ShadowOffsetCompact,
                     shape = chipShape,
-                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 8.dp)
+                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 8.dp),
+                    selected = isSelected
                 ) {
                     Text(
                         text = preset.displayLabel,
@@ -112,10 +118,18 @@ fun SpeedSelectorControl(
                 valueRange = 10f..500f,
                 modifier = Modifier.weight(1f),
                 colors = SliderDefaults.colors(
-                    thumbColor = colors.accentYellow,
+                    thumbColor = if (colors.isDark) colors.accentYellow else colors.onSurface,
                     activeTrackColor = colors.accentPurple,
-                    inactiveTrackColor = colors.progressTrack
-                )
+                    inactiveTrackColor = colors.subtext
+                ),
+                thumb = {
+                    Box(
+                        modifier = Modifier
+                            .size(22.dp)
+                            .background(colors.accentYellow, CircleShape)
+                            .border(NeobrutalismMetrics.BorderWidthCompact, colors.border, CircleShape)
+                    )
+                }
             )
 
             NeobrutalistIconButton(

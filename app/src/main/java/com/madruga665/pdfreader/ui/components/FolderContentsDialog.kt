@@ -36,7 +36,6 @@ import com.madruga665.pdfreader.core.model.FolderPdfItem
 import com.madruga665.pdfreader.ui.theme.NeobrutalismFolderAccent
 import com.madruga665.pdfreader.ui.theme.NeobrutalismMetrics
 import com.madruga665.pdfreader.ui.theme.NeobrutalismTheme
-import com.madruga665.pdfreader.ui.theme.neobrutalistShadow
 import java.util.Locale
 
 @Composable
@@ -59,33 +58,13 @@ fun FolderContentsDialog(
     NeobrutalistDialog(
         onDismissRequest = onDismissRequest,
         icon = {
-            Box(
-                modifier = Modifier.padding(
-                    end = NeobrutalismMetrics.ShadowOffsetCompact,
-                    bottom = NeobrutalismMetrics.ShadowOffsetCompact
-                )
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(40.dp)
-                        .neobrutalistShadow(
-                            shadowColor = colors.shadow,
-                            borderColor = colors.border,
-                            borderWidth = NeobrutalismMetrics.BorderWidthCompact,
-                            shadowOffset = NeobrutalismMetrics.ShadowOffsetCompact,
-                            shape = iconShape
-                        )
-                        .background(accentColor, iconShape),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Folder,
-                        contentDescription = null,
-                        tint = colors.onAccent,
-                        modifier = Modifier.size(22.dp)
-                    )
-                }
-            }
+            NeobrutalistIconBox(
+                icon = Icons.Default.Folder,
+                containerColor = accentColor,
+                boxSize = 40.dp,
+                iconSize = 22.dp,
+                shape = iconShape
+            )
         },
         title = folder.displayName,
         actions = {
@@ -125,8 +104,7 @@ fun FolderContentsDialog(
                     contentAlignment = Alignment.Center
                 ) {
                     CircularProgressIndicator(
-                        color = colors.accentYellow,
-                        trackColor = colors.progressTrack
+                        color = MaterialTheme.colorScheme.primary
                     )
                 }
             } else if (pdfList.isEmpty()) {

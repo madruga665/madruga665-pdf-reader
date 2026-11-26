@@ -52,6 +52,7 @@ import com.madruga665.pdfreader.ui.components.FolderContentsDialog
 import com.madruga665.pdfreader.ui.components.HomeEmptyState
 import com.madruga665.pdfreader.ui.components.NeobrutalistBadge
 import com.madruga665.pdfreader.ui.components.NeobrutalistButton
+import com.madruga665.pdfreader.ui.components.NeobrutalistIconBox
 import com.madruga665.pdfreader.ui.components.NeobrutalistIconButton
 import com.madruga665.pdfreader.ui.components.NeobrutalistSnackbarHost
 import com.madruga665.pdfreader.ui.components.RecentDocumentCard
@@ -59,7 +60,6 @@ import com.madruga665.pdfreader.ui.components.RestorePreviewDialog
 import com.madruga665.pdfreader.ui.theme.NeobrutalismMetrics
 import com.madruga665.pdfreader.ui.theme.NeobrutalismTheme
 import com.madruga665.pdfreader.ui.theme.neobrutalistGridBackground
-import com.madruga665.pdfreader.ui.theme.neobrutalistShadow
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -92,33 +92,13 @@ fun HomeScreen(
                 TopAppBar(
                     title = {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(
-                                modifier = Modifier.padding(
-                                    end = NeobrutalismMetrics.ShadowOffsetCompact,
-                                    bottom = NeobrutalismMetrics.ShadowOffsetCompact
-                                )
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(36.dp)
-                                        .neobrutalistShadow(
-                                            shadowColor = colors.shadow,
-                                            borderColor = colors.border,
-                                            borderWidth = NeobrutalismMetrics.BorderWidthCompact,
-                                            shadowOffset = NeobrutalismMetrics.ShadowOffsetCompact,
-                                            shape = brandIconShape
-                                        )
-                                        .background(colors.accentYellow, brandIconShape),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.AutoMirrored.Filled.MenuBook,
-                                        contentDescription = null,
-                                        tint = colors.onAccent,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                }
-                            }
+                            NeobrutalistIconBox(
+                                icon = Icons.AutoMirrored.Filled.MenuBook,
+                                containerColor = colors.accentYellow,
+                                boxSize = 36.dp,
+                                iconSize = 20.dp,
+                                shape = brandIconShape
+                            )
                             Spacer(modifier = Modifier.width(10.dp))
                             Text(
                                 text = "PDF Reader",
