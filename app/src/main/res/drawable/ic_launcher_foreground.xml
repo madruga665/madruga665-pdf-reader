@@ -1,0 +1,139 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    
+    <!-- Document Drop Shadow -->
+    <path
+        android:pathData="M40,27 L59,27 L77,45 L77,79 L69,87 L39,87 L31,79 L31,36 Z"
+        android:fillColor="#8C000000" />
+
+    <!-- Document Ambient Edge Glow -->
+    <path
+        android:pathData="M40,23 L59,23 L77,41 L77,75 L69,83 L39,83 L31,75 L31,32 Z"
+        android:strokeWidth="3.5"
+        android:strokeColor="#33FF2A54"
+        android:fillColor="#00000000" />
+
+    <!-- Main Chamfered Document Card Body -->
+    <path
+        android:pathData="M40,23 L59,23 L77,41 L77,75 L69,83 L39,83 L31,75 L31,32 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="31"
+                android:startY="23"
+                android:endX="77"
+                android:endY="83">
+                <item android:offset="0.0" android:color="#FFFF4766" />
+                <item android:offset="0.45" android:color="#FFE61C40" />
+                <item android:offset="1.0" android:color="#FFAD082E" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Chamfered Bevel Frame Highlight -->
+    <path
+        android:pathData="M40,23 L59,23 L77,41 L77,75 L69,83 L39,83 L31,75 L31,32 Z"
+        android:strokeWidth="1.2">
+        <aapt:attr name="android:strokeColor">
+            <gradient
+                android:type="linear"
+                android:startX="31"
+                android:startY="23"
+                android:endX="77"
+                android:endY="83">
+                <item android:offset="0.0" android:color="#CCFFFFFF" />
+                <item android:offset="0.4" android:color="#33FFFFFF" />
+                <item android:offset="1.0" android:color="#59000000" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Fold Flap Cast Shadow -->
+    <path
+        android:pathData="M57,23 L77,43 L57,43 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="59"
+                android:startY="23"
+                android:endX="56"
+                android:endY="44">
+                <item android:offset="0.0" android:color="#00000000" />
+                <item android:offset="0.7" android:color="#73000000" />
+                <item android:offset="1.0" android:color="#00000000" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Chamfered Fold Flap Body -->
+    <path
+        android:pathData="M59,23 L77,41 L62,41 L59,38 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="59"
+                android:startY="23"
+                android:endX="77"
+                android:endY="41">
+                <item android:offset="0.0" android:color="#FFFFB3AF" />
+                <item android:offset="1.0" android:color="#FFFA6173" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Fold Flap Edge Highlight -->
+    <path
+        android:pathData="M59,23 L59,38 L62,41"
+        android:strokeWidth="0.8"
+        android:strokeColor="#CCFFFFFF"
+        android:fillColor="#00000000" />
+
+    <!-- Central Emblem: Monolithic Chamfered P Shadow -->
+    <path
+        android:pathData="M43,39.5 L60,39.5 L68,47.5 L68,51.5 L60,59.5 L49,59.5 L49,69.5 L46,72.5 L43,72.5 L40,69.5 L40,42.5 Z M49,46.5 L49,52.5 L57,52.5 L61,49.5 L57,46.5 Z"
+        android:fillColor="#40000000"
+        android:fillType="evenOdd" />
+
+    <!-- Central Emblem: Chamfered P Body (Crisp White to Platinum Gradient) -->
+    <path
+        android:pathData="M43,38 L60,38 L68,46 L68,50 L60,58 L49,58 L49,68 L46,71 L43,71 L40,68 L40,41 Z M49,45 L49,51 L57,51 L61,48 L57,45 Z"
+        android:fillType="evenOdd">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="40"
+                android:startY="38"
+                android:endX="68"
+                android:endY="71">
+                <item android:offset="0.0" android:color="#FFFFFFFF" />
+                <item android:offset="1.0" android:color="#FFF0F2F8" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Velocity Auto-Scroll Chevron 1 (White / Top) -->
+    <path
+        android:pathData="M52,61 L58.5,66 L65,61 L62.5,61 L58.5,64 L54.5,61 Z"
+        android:fillColor="#E6FFFFFF" />
+
+    <!-- Velocity Auto-Scroll Chevron 2 (Radiant Amber Gold / Bottom) -->
+    <path
+        android:pathData="M52,66.5 L58.5,71.5 L65,66.5 L62.5,66.5 L58.5,69.5 L54.5,66.5 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="52"
+                android:startY="66.5"
+                android:endX="65"
+                android:endY="71.5">
+                <item android:offset="0.0" android:color="#FFFFDE59" />
+                <item android:offset="1.0" android:color="#FFFF9926" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+</vector>

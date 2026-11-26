@@ -1,0 +1,15 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Document Silhouette with cutouts -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:fillType="evenOdd"
+        android:pathData="M40,23 L59,23 L77,41 L77,75 L69,83 L39,83 L31,75 L31,32 Z M43,38 L60,38 L68,46 L68,50 L60,58 L49,58 L49,68 L46,71 L43,71 L40,68 L40,41 Z M49,45 L49,51 L57,51 L61,48 L57,45 Z M52,61 L58.5,66 L65,61 L62.5,61 L58.5,64 L54.5,61 Z M52,66.5 L58.5,71.5 L65,66.5 L62.5,66.5 L58.5,69.5 L54.5,66.5 Z" />
+    <!-- Fold Flap accent -->
+    <path
+        android:fillColor="#80FFFFFF"
+        android:pathData="M59,23 L77,41 L62,41 L59,38 Z" />
+</vector>
