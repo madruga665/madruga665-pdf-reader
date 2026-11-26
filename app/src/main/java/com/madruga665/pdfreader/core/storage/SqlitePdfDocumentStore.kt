@@ -4,6 +4,7 @@ import com.madruga665.pdfreader.core.database.PdfReaderDatabaseSchema
 import com.madruga665.pdfreader.core.database.SqliteAppDatabase
 import com.madruga665.pdfreader.core.database.SqliteConnection
 import com.madruga665.pdfreader.core.database.SqliteCursor
+import com.madruga665.pdfreader.core.documents.DocumentRelinkPolicy
 import com.madruga665.pdfreader.core.model.FavoriteFolder
 import com.madruga665.pdfreader.core.model.PdfDocumentRecord
 import com.madruga665.pdfreader.core.model.ReadingSession
@@ -15,7 +16,8 @@ import java.util.UUID
 
 class SqlitePdfDocumentStore(
     private val database: SqliteAppDatabase,
-    private val uuidGenerator: () -> String = { UUID.randomUUID().toString() }
+    private val uuidGenerator: () -> String = { UUID.randomUUID().toString() },
+    private val awaitReady: suspend () -> Unit = {}
 ) : PdfDocumentStore {
 
     private val changeSignal = MutableStateFlow(0L)
@@ -26,6 +28,7 @@ class SqlitePdfDocumentStore(
 
     override fun observeRecents(limit: Int): Flow<List<PdfDocumentRecord>> =
         changeSignal.map {
+            awaitReady()
             database.withConnection(readOnly = true) { conn ->
                 queryDocuments(
                     conn = conn,
@@ -44,8 +47,9 @@ class SqlitePdfDocumentStore(
     override fun observeAllDocuments(): Flow<List<PdfDocumentRecord>> =
         changeSignal.map { getAllDocumentsSnapshot() }
 
-    override suspend fun getAllDocumentsSnapshot(): List<PdfDocumentRecord> =
-        database.withConnection(readOnly = true) { conn ->
+    override suspend fun getAllDocumentsSnapshot(): List<PdfDocumentRecord> {
+        awaitReady()
+        return database.withConnection(readOnly = true) { conn ->
             queryDocuments(
                 conn = conn,
                 sql = """
@@ -55,9 +59,11 @@ class SqlitePdfDocumentStore(
                 """.trimIndent()
             )
         }
+    }
 
     override suspend fun getById(id: String): PdfDocumentRecord? {
         if (id.isBlank()) return null
+        awaitReady()
         return database.withConnection(readOnly = true) { conn ->
             querySingleDocument(
                 conn = conn,
@@ -69,6 +75,7 @@ class SqlitePdfDocumentStore(
 
     override suspend fun getByUri(documentUri: String): PdfDocumentRecord? {
         if (documentUri.isBlank()) return null
+        awaitReady()
         return database.withConnection(readOnly = true) { conn ->
             querySingleDocument(
                 conn = conn,
@@ -86,6 +93,7 @@ class SqlitePdfDocumentStore(
     ): PdfDocumentRecord {
         val safeUri = uri.trim()
         require(safeUri.isNotBlank()) { "documentUri cannot be blank" }
+        awaitReady()
         val safeFileName = PdfDocumentRecord.sanitizeFileName(fileName)
         val safePageCount = PdfDocumentRecord.sanitizePageCount(pageCount)
         val safeNow = PdfDocumentRecord.sanitizeTimestamp(nowMillis)
@@ -166,6 +174,7 @@ class SqlitePdfDocumentStore(
         nowMillis: Long
     ) {
         if (documentId.isBlank()) return
+        awaitReady()
         val safeNow = PdfDocumentRecord.sanitizeTimestamp(nowMillis)
         database.withConnection { conn ->
             conn.inTransaction { tx ->
@@ -209,6 +218,7 @@ class SqlitePdfDocumentStore(
 
     override suspend fun setDocumentAvailability(documentUri: String, isAvailable: Boolean) {
         if (documentUri.isBlank()) return
+        awaitReady()
         val now = System.currentTimeMillis()
         database.withConnection { conn ->
             conn.execSQL(
@@ -225,6 +235,7 @@ class SqlitePdfDocumentStore(
 
     override suspend fun updateAvailabilityBatch(updates: Map<String, Boolean>) {
         if (updates.isEmpty()) return
+        awaitReady()
         val now = System.currentTimeMillis()
         database.withConnection { conn ->
             conn.inTransaction { tx ->
@@ -256,6 +267,7 @@ class SqlitePdfDocumentStore(
         if (targetDocumentId.isBlank() || safeUri.isBlank()) {
             return Result.failure(IllegalArgumentException("targetDocumentId and newUri must not be blank"))
         }
+        awaitReady()
         val safeFileName = PdfDocumentRecord.sanitizeFileName(newFileName)
         val safePageCount = PdfDocumentRecord.sanitizePageCount(newPageCount)
         val safeNow = PdfDocumentRecord.sanitizeTimestamp(nowMillis)
@@ -285,12 +297,16 @@ class SqlitePdfDocumentStore(
                         )
                     }
 
-                    val adjustedPage = PdfDocumentRecord.sanitizePageIndex(target.currentPageIndex, safePageCount)
-                    val adjustedRatio = if (adjustedPage != target.currentPageIndex) {
-                        if (safePageCount <= 1) 0.0f else adjustedPage.toFloat() / safePageCount.toFloat()
-                    } else {
-                        target.normalizedScrollRatio
-                    }.let(PdfDocumentRecord::sanitizeScrollRatio)
+                    val adjustedPage = DocumentRelinkPolicy.adjustPageIndexForNewPageCount(
+                        savedPageIndex = target.currentPageIndex,
+                        newPageCount = safePageCount
+                    )
+                    val adjustedRatio = DocumentRelinkPolicy.adjustProgressRatio(
+                        adjustedPageIndex = adjustedPage,
+                        savedPageIndex = target.currentPageIndex,
+                        newPageCount = safePageCount,
+                        savedRatio = target.normalizedScrollRatio
+                    )
 
                     val updated = target.copy(
                         documentUri = safeUri,
@@ -341,6 +357,7 @@ class SqlitePdfDocumentStore(
 
     override suspend fun removeFromRecents(documentIdOrUri: String, deleteIfUnavailable: Boolean) {
         if (documentIdOrUri.isBlank()) return
+        awaitReady()
         val now = System.currentTimeMillis()
         database.withConnection { conn ->
             conn.inTransaction { tx ->
@@ -376,6 +393,7 @@ class SqlitePdfDocumentStore(
     }
 
     override suspend fun clearAllRecents() {
+        awaitReady()
         val now = System.currentTimeMillis()
         database.withConnection { conn ->
             conn.inTransaction { tx ->
@@ -391,31 +409,40 @@ class SqlitePdfDocumentStore(
         notifyChanged()
     }
 
+    // Intentionally bypasses awaitReady() so LegacyDataStoreMigrator can check migration state without deadlock.
     override suspend fun isDataStoreMigrationCompleted(): Boolean =
-        getAppSetting(PdfReaderDatabaseSchema.SETTING_DATASTORE_MIGRATION_COMPLETED) ==
-            PdfReaderDatabaseSchema.MIGRATION_COMPLETED_VALUE
-
-    override suspend fun getAppSetting(key: String): String? =
         database.withConnection(readOnly = true) { conn ->
-            readAppSetting(conn, key)
+            readAppSetting(conn, PdfReaderDatabaseSchema.SETTING_DATASTORE_MIGRATION_COMPLETED) ==
+                PdfReaderDatabaseSchema.MIGRATION_COMPLETED_VALUE
         }
 
+    override suspend fun getAppSetting(key: String): String? {
+        awaitReady()
+        return database.withConnection(readOnly = true) { conn ->
+            readAppSetting(conn, key)
+        }
+    }
+
     override suspend fun setAppSetting(key: String, value: String) {
+        awaitReady()
         database.withConnection { conn ->
             upsertAppSetting(conn, key, value)
         }
         notifyChanged()
     }
 
-    override suspend fun getFavoriteFoldersSnapshot(): List<FavoriteFolder> =
-        database.withConnection(readOnly = true) { conn ->
+    override suspend fun getFavoriteFoldersSnapshot(): List<FavoriteFolder> {
+        awaitReady()
+        return database.withConnection(readOnly = true) { conn ->
             queryFavoriteFolders(conn)
         }
+    }
 
     override fun observeFavoriteFolders(): Flow<List<FavoriteFolder>> =
         changeSignal.map { getFavoriteFoldersSnapshot() }
 
     override suspend fun upsertFavoriteFolder(folder: FavoriteFolder) {
+        awaitReady()
         database.withConnection { conn ->
             upsertFavoriteFolderRow(conn, folder)
         }
@@ -423,6 +450,7 @@ class SqlitePdfDocumentStore(
     }
 
     override suspend fun updateFavoriteFolderFileCount(treeUri: String, count: Int) {
+        awaitReady()
         database.withConnection { conn ->
             conn.execSQL(
                 """
@@ -437,6 +465,7 @@ class SqlitePdfDocumentStore(
     }
 
     override suspend fun removeFavoriteFolder(treeUri: String) {
+        awaitReady()
         database.withConnection { conn ->
             conn.execSQL(
                 "DELETE FROM ${PdfReaderDatabaseSchema.TABLE_FAVORITE_FOLDERS} WHERE tree_uri = ?",
@@ -447,6 +476,7 @@ class SqlitePdfDocumentStore(
     }
 
     override suspend fun replaceFavoriteFolders(folders: List<FavoriteFolder>) {
+        awaitReady()
         val deduplicated = folders
             .distinctBy { it.treeUri }
             .sortedByDescending { it.pinnedTimestamp }
@@ -461,6 +491,7 @@ class SqlitePdfDocumentStore(
         notifyChanged()
     }
 
+    // Intentionally bypasses awaitReady() so LegacyDataStoreMigrator can populate SQLite before releasing the gate.
     override suspend fun importLegacyDataOnce(
         globalDefaultSpeedPxPerSec: Float,
         documents: List<PdfDocumentRecord>,
@@ -519,6 +550,7 @@ class SqlitePdfDocumentStore(
         favoriteFolders: List<FavoriteFolder>,
         nowMillis: Long
     ) {
+        awaitReady()
         val safeGlobalSpeed = PdfDocumentRecord.sanitizeSpeed(globalDefaultSpeedPxPerSec)
         val deduplicatedDocs = deduplicateDocuments(documents)
         val deduplicatedFolders = favoriteFolders
@@ -562,6 +594,7 @@ class SqlitePdfDocumentStore(
         }
 
     override suspend fun saveSession(session: ReadingSession) {
+        awaitReady()
         val safeNow = PdfDocumentRecord.sanitizeTimestamp(session.lastReadTimestamp)
         database.withConnection { conn ->
             conn.inTransaction { tx ->
@@ -583,7 +616,6 @@ class SqlitePdfDocumentStore(
                     val safeRatio = PdfDocumentRecord.sanitizeScrollRatio(session.normalizedScrollRatio)
                     val safeZoom = PdfDocumentRecord.sanitizeZoom(session.zoomScale)
                     val safeSpeed = PdfDocumentRecord.sanitizeSpeed(session.preferredSpeedPxPerSec)
-                    // Preserve existing custom_default_speed_px_per_sec if session.customDefaultSpeedPxPerSec is null
                     val resolvedCustomSpeed = PdfDocumentRecord.sanitizeOptionalSpeed(session.customDefaultSpeedPxPerSec)
                         ?: existing.customDefaultSpeedPxPerSec
                     val resolvedFileName = session.fileName.trim().takeIf { it.isNotEmpty() } ?: existing.fileName
@@ -641,12 +673,14 @@ class SqlitePdfDocumentStore(
 
     override fun getGlobalDefaultSpeed(): Flow<Float> =
         changeSignal.map {
+            awaitReady()
             database.withConnection(readOnly = true) { conn ->
                 readGlobalDefaultSpeed(conn)
             }
         }
 
     override suspend fun setGlobalDefaultSpeed(speedPxPerSec: Float) {
+        awaitReady()
         val clamped = PdfDocumentRecord.sanitizeSpeed(speedPxPerSec)
         database.withConnection { conn ->
             upsertAppSetting(
@@ -665,6 +699,7 @@ class SqlitePdfDocumentStore(
 
     override suspend fun saveCustomDocumentSpeed(documentUri: String, speedPxPerSec: Float) {
         if (documentUri.isBlank()) return
+        awaitReady()
         val clamped = PdfDocumentRecord.sanitizeSpeed(speedPxPerSec)
         val now = System.currentTimeMillis()
         database.withConnection { conn ->
@@ -707,17 +742,22 @@ class SqlitePdfDocumentStore(
 
     override suspend fun clearCustomDocumentSpeed(documentUri: String) {
         if (documentUri.isBlank()) return
+        awaitReady()
         val now = System.currentTimeMillis()
         database.withConnection { conn ->
-            conn.execSQL(
-                """
-                UPDATE ${PdfReaderDatabaseSchema.TABLE_PDF_DOCUMENTS}
-                SET custom_default_speed_px_per_sec = NULL,
-                    updated_at = ?
-                WHERE document_uri = ?
-                """.trimIndent(),
-                arrayOf(now, documentUri)
-            )
+            conn.inTransaction { tx ->
+                val globalDefaultSpeed = readGlobalDefaultSpeed(tx)
+                tx.execSQL(
+                    """
+                    UPDATE ${PdfReaderDatabaseSchema.TABLE_PDF_DOCUMENTS}
+                    SET custom_default_speed_px_per_sec = NULL,
+                        preferred_speed_px_per_sec = ?,
+                        updated_at = ?
+                    WHERE document_uri = ?
+                    """.trimIndent(),
+                    arrayOf(globalDefaultSpeed.toDouble(), now, documentUri)
+                )
+            }
         }
         notifyChanged()
     }
@@ -725,6 +765,7 @@ class SqlitePdfDocumentStore(
     override suspend fun saveDocumentFileName(documentUri: String, fileName: String) {
         val trimmed = fileName.trim()
         if (documentUri.isBlank() || trimmed.isEmpty()) return
+        awaitReady()
         val now = System.currentTimeMillis()
         database.withConnection { conn ->
             conn.execSQL(
@@ -893,8 +934,12 @@ class SqlitePdfDocumentStore(
         val usedIds = mutableSetOf<String>()
         for (raw in documents) {
             val existingByUri = byUri[raw.documentUri]
-            if (existingByUri != null && existingByUri.lastAccessedAt >= raw.lastAccessedAt) {
-                continue
+            if (existingByUri != null) {
+                if (existingByUri.lastAccessedAt >= raw.lastAccessedAt) {
+                    continue
+                }
+                // Free the replaced row's id before checking collision so the same document keeps its UUID (RN-01).
+                usedIds.remove(existingByUri.id)
             }
             val safeId = if (raw.id in usedIds) uuidGenerator() else raw.id
             usedIds.add(safeId)

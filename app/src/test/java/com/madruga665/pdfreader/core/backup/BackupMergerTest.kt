@@ -229,4 +229,116 @@ class BackupMergerTest {
         assertEquals(local.documents, merged.documents)
         assertEquals(local.favoriteFolders, merged.favoriteFolders)
     }
+
+    @Test
+    fun mergeMode_crossCollisionIdAndUri_incomingNewer_mergesWithoutDuplicates() {
+        val local = BackupPayload(
+            exportedAt = 200L,
+            appVersion = "1.0.0",
+            documents = listOf(
+                PdfDocumentRecord.createSanitized(
+                    id = "A",
+                    documentUri = "u1",
+                    fileName = "a_old.pdf",
+                    pageCount = 10,
+                    currentPageIndex = 1,
+                    customDefaultSpeedPxPerSec = null,
+                    isInRecents = false,
+                    lastAccessedAt = 100L
+                ),
+                PdfDocumentRecord.createSanitized(
+                    id = "B",
+                    documentUri = "u2",
+                    fileName = "b_local.pdf",
+                    pageCount = 10,
+                    currentPageIndex = 4,
+                    customDefaultSpeedPxPerSec = 180f,
+                    isInRecents = true,
+                    lastAccessedAt = 200L
+                )
+            )
+        )
+        val incoming = BackupPayload(
+            exportedAt = 300L,
+            appVersion = "1.0.0",
+            documents = listOf(
+                PdfDocumentRecord.createSanitized(
+                    id = "A",
+                    documentUri = "u2",
+                    fileName = "a_incoming.pdf",
+                    pageCount = 10,
+                    currentPageIndex = 6,
+                    customDefaultSpeedPxPerSec = null,
+                    isInRecents = false,
+                    lastAccessedAt = 300L
+                )
+            )
+        )
+
+        val merged = BackupMerger.merge(local, incoming, RestoreMode.MERGE)
+
+        assertEquals(1, merged.documents.size)
+        val doc = merged.documents.single()
+        assertEquals("A", doc.id)
+        assertEquals("u2", doc.documentUri)
+        assertEquals(6, doc.currentPageIndex)
+        assertEquals(180f, doc.customDefaultSpeedPxPerSec ?: 0f, 0.001f)
+        assertTrue(doc.isInRecents)
+    }
+
+    @Test
+    fun mergeMode_crossCollisionIdAndUri_localNewer_preservesLocalWinnerAndNoDuplicates() {
+        val local = BackupPayload(
+            exportedAt = 400L,
+            appVersion = "1.0.0",
+            documents = listOf(
+                PdfDocumentRecord.createSanitized(
+                    id = "A",
+                    documentUri = "u1",
+                    fileName = "a_old.pdf",
+                    pageCount = 10,
+                    currentPageIndex = 1,
+                    customDefaultSpeedPxPerSec = 150f,
+                    isInRecents = false,
+                    lastAccessedAt = 100L
+                ),
+                PdfDocumentRecord.createSanitized(
+                    id = "B",
+                    documentUri = "u2",
+                    fileName = "b_local_newer.pdf",
+                    pageCount = 10,
+                    currentPageIndex = 8,
+                    customDefaultSpeedPxPerSec = null,
+                    isInRecents = true,
+                    lastAccessedAt = 400L
+                )
+            )
+        )
+        val incoming = BackupPayload(
+            exportedAt = 300L,
+            appVersion = "1.0.0",
+            documents = listOf(
+                PdfDocumentRecord.createSanitized(
+                    id = "A",
+                    documentUri = "u2",
+                    fileName = "a_incoming.pdf",
+                    pageCount = 10,
+                    currentPageIndex = 6,
+                    customDefaultSpeedPxPerSec = 180f,
+                    isInRecents = false,
+                    lastAccessedAt = 300L
+                )
+            )
+        )
+
+        val merged = BackupMerger.merge(local, incoming, RestoreMode.MERGE)
+
+        assertEquals(1, merged.documents.size)
+        val doc = merged.documents.single()
+        assertEquals("B", doc.id)
+        assertEquals("u2", doc.documentUri)
+        assertEquals(8, doc.currentPageIndex)
+        assertEquals(180f, doc.customDefaultSpeedPxPerSec ?: 0f, 0.001f)
+        assertTrue(doc.isInRecents)
+    }
 }

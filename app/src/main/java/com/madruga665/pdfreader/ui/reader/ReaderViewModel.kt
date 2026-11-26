@@ -83,7 +83,6 @@ class ReaderViewModel(
                 it.copy(error = ReaderErrorState.None, unavailableDocumentId = null)
             }
             is ReaderIntent.RequestRelinkCurrentDocument -> requestRelinkCurrentDocument()
-            is ReaderIntent.CompleteRelinkCurrentDocument -> openDocument(intent.newUri)
         }
     }
 

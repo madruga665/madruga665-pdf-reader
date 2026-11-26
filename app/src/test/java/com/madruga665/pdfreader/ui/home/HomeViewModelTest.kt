@@ -501,7 +501,7 @@ class HomeViewModelTest {
     }
 
     @Test
-    fun completeRelinkPdf_invalidFile_preservesOriginalAndSetsErrorMessage() = runTest {
+    fun completeRelinkPdf_invalidFile_preservesOriginalAndEmitsErrorToast() = runTest {
         val documentStore = mockk<com.madruga665.pdfreader.core.storage.PdfDocumentStore>(relaxed = true)
         val availabilityChecker = mockk<com.madruga665.pdfreader.core.documents.DocumentAvailabilityChecker>(relaxed = true)
         val target = com.madruga665.pdfreader.core.model.PdfDocumentRecord.createSanitized(
@@ -525,11 +525,83 @@ class HomeViewModelTest {
             availabilityChecker = availabilityChecker
         )
 
-        vm.onIntent(HomeIntent.CompleteRelinkPdf("doc-uuid-1", badUri))
-        testDispatcher.scheduler.advanceUntilIdle()
+        vm.sideEffects.test {
+            vm.onIntent(HomeIntent.CompleteRelinkPdf("doc-uuid-1", badUri))
+            testDispatcher.scheduler.advanceUntilIdle()
 
-        assertTrue(vm.viewState.value.errorMessage != null)
-        coVerify(exactly = 0) { documentStore.relinkDocument(any(), any(), any(), any(), any(), any()) }
+            val effect = awaitItem()
+            assertTrue(effect is HomeSideEffect.ShowToast)
+            val toast = effect as HomeSideEffect.ShowToast
+            assertTrue(toast.isLong)
+            assertTrue(toast.message.contains("Arquivo não é um PDF válido"))
+            assertNull(vm.viewState.value.errorMessage)
+            coVerify(exactly = 0) { documentStore.relinkDocument(any(), any(), any(), any(), any(), any()) }
+        }
+    }
+
+    @Test
+    fun confirmConsolidateRelinkConflict_failure_emitsErrorToast() = runTest {
+        val documentStore = mockk<com.madruga665.pdfreader.core.storage.PdfDocumentStore>(relaxed = true)
+        val availabilityChecker = mockk<com.madruga665.pdfreader.core.documents.DocumentAvailabilityChecker>(relaxed = true)
+        val target = com.madruga665.pdfreader.core.model.PdfDocumentRecord.createSanitized(
+            id = "doc-uuid-a",
+            documentUri = "content://pdf/a.pdf",
+            fileName = "a.pdf",
+            pageCount = 10,
+            isAvailable = false
+        )
+        val conflicting = com.madruga665.pdfreader.core.model.PdfDocumentRecord.createSanitized(
+            id = "doc-uuid-b",
+            documentUri = "content://pdf/b.pdf",
+            fileName = "b.pdf",
+            pageCount = 6,
+            isAvailable = true
+        )
+        val conflictUri = mockk<Uri>(relaxed = true)
+        every { conflictUri.toString() } returns "content://pdf/b.pdf"
+
+        coEvery { documentStore.getById("doc-uuid-a") } returns target
+        coEvery { documentStore.getByUri("content://pdf/b.pdf") } returns conflicting
+        coEvery { availabilityChecker.inspectPdf("content://pdf/b.pdf") } returns Result.success(
+            com.madruga665.pdfreader.core.documents.InspectedPdfMetadata(
+                uri = "content://pdf/b.pdf",
+                fileName = "b.pdf",
+                pageCount = 6
+            )
+        )
+        coEvery {
+            documentStore.relinkDocument(
+                targetDocumentId = "doc-uuid-a",
+                newUri = "content://pdf/b.pdf",
+                newFileName = "b.pdf",
+                newPageCount = 6,
+                consolidateConflictingDocumentId = "doc-uuid-b",
+                nowMillis = any()
+            )
+        } returns Result.failure(IllegalStateException("SQLite lock error"))
+
+        val vm = HomeViewModel(
+            recentsRepository = recentsRepository,
+            favoriteFoldersRepository = favoriteFoldersRepository,
+            documentStore = documentStore,
+            availabilityChecker = availabilityChecker
+        )
+
+        vm.onIntent(HomeIntent.CompleteRelinkPdf("doc-uuid-a", conflictUri))
+        testDispatcher.scheduler.advanceUntilIdle()
+        assertTrue(vm.viewState.value.relinkConflict != null)
+
+        vm.sideEffects.test {
+            vm.onIntent(HomeIntent.ConfirmConsolidateRelinkConflict)
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            val effect = awaitItem()
+            assertTrue(effect is HomeSideEffect.ShowToast)
+            val toast = effect as HomeSideEffect.ShowToast
+            assertTrue(toast.isLong)
+            assertTrue(toast.message.contains("SQLite lock error"))
+            assertNull(vm.viewState.value.errorMessage)
+        }
     }
 
     @Test

@@ -56,7 +56,6 @@ import com.madruga665.pdfreader.ui.components.NeobrutalistIconBox
 import com.madruga665.pdfreader.ui.components.NeobrutalistIconButton
 import com.madruga665.pdfreader.ui.components.NeobrutalistSnackbarHost
 import com.madruga665.pdfreader.ui.components.RecentDocumentCard
-import com.madruga665.pdfreader.ui.components.RelinkConflictDialog
 import com.madruga665.pdfreader.ui.components.RestorePreviewDialog
 import com.madruga665.pdfreader.ui.theme.NeobrutalismMetrics
 import com.madruga665.pdfreader.ui.theme.NeobrutalismTheme
@@ -297,21 +296,6 @@ fun HomeScreen(
                     },
                     onDismiss = {
                         onIntent(HomeIntent.DismissRestorePreview)
-                    }
-                )
-            }
-
-            viewState.relinkConflict?.let { conflict ->
-                RelinkConflictDialog(
-                    conflict = conflict,
-                    onConsolidate = {
-                        onIntent(HomeIntent.ConfirmConsolidateRelinkConflict)
-                    },
-                    onOpenExisting = {
-                        onIntent(HomeIntent.OpenExistingFromRelinkConflict)
-                    },
-                    onDismiss = {
-                        onIntent(HomeIntent.DismissRelinkConflict)
                     }
                 )
             }

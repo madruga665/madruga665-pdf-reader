@@ -20,24 +20,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
-import com.madruga665.pdfreader.core.backup.AndroidSafBackupFileGateway
-import com.madruga665.pdfreader.core.backup.BackupRepository
 import com.madruga665.pdfreader.core.backup.SqliteBackupRepository
-import com.madruga665.pdfreader.core.backup.SqliteBackupValidator
-import com.madruga665.pdfreader.core.database.SqliteAppDatabase
-import com.madruga665.pdfreader.core.documents.AndroidDocumentAvailabilityChecker
-import com.madruga665.pdfreader.core.documents.DocumentAvailabilityChecker
-import com.madruga665.pdfreader.core.home.FavoriteFoldersRepository
-import com.madruga665.pdfreader.core.home.RecentsRepository
-import com.madruga665.pdfreader.core.home.SqliteFavoriteFoldersRepository
-import com.madruga665.pdfreader.core.home.SqliteRecentsRepository
 import com.madruga665.pdfreader.core.model.ReaderErrorState
 import com.madruga665.pdfreader.core.repository.AndroidPdfDocumentRepository
-import com.madruga665.pdfreader.core.storage.DataStoreLegacyReader
-import com.madruga665.pdfreader.core.storage.LegacyDataStoreMigrator
-import com.madruga665.pdfreader.core.storage.PdfDocumentStore
-import com.madruga665.pdfreader.core.storage.SqlitePdfDocumentStore
+import com.madruga665.pdfreader.core.storage.PdfReaderAppStorage
 import com.madruga665.pdfreader.ui.components.AdaptiveReaderScaffold
+import com.madruga665.pdfreader.ui.components.RelinkConflictDialog
 import com.madruga665.pdfreader.ui.home.HomeIntent
 import com.madruga665.pdfreader.ui.home.HomeScreen
 import com.madruga665.pdfreader.ui.home.HomeSideEffect
@@ -47,17 +35,10 @@ import com.madruga665.pdfreader.ui.reader.ReaderIntent
 import com.madruga665.pdfreader.ui.reader.ReaderSideEffect
 import com.madruga665.pdfreader.ui.reader.ReaderViewModel
 import com.madruga665.pdfreader.ui.theme.PdfReaderTheme
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.runBlocking
 
 class MainActivity : ComponentActivity() {
 
-    private lateinit var appDatabase: SqliteAppDatabase
-    private lateinit var documentStore: PdfDocumentStore
-    private lateinit var recentsRepository: RecentsRepository
-    private lateinit var favoriteFoldersRepository: FavoriteFoldersRepository
-    private lateinit var availabilityChecker: DocumentAvailabilityChecker
-    private lateinit var backupRepository: BackupRepository
+    private lateinit var appStorage: PdfReaderAppStorage
 
     private var pendingRelinkDocumentId: String? = null
     private var hasCompletedInitialResume = false
@@ -68,8 +49,8 @@ class MainActivity : ComponentActivity() {
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
                 return ReaderViewModel(
                     repository = AndroidPdfDocumentRepository(applicationContext),
-                    sessionStore = documentStore,
-                    recentsRepository = recentsRepository
+                    sessionStore = appStorage.documentStore,
+                    recentsRepository = appStorage.recentsRepository
                 ) as T
             }
         }
@@ -80,11 +61,11 @@ class MainActivity : ComponentActivity() {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
                 return HomeViewModel(
-                    recentsRepository = recentsRepository,
-                    favoriteFoldersRepository = favoriteFoldersRepository,
-                    backupRepository = backupRepository,
-                    documentStore = documentStore,
-                    availabilityChecker = availabilityChecker
+                    recentsRepository = appStorage.recentsRepository,
+                    favoriteFoldersRepository = appStorage.favoriteFoldersRepository,
+                    backupRepository = appStorage.backupRepository,
+                    documentStore = appStorage.documentStore,
+                    availabilityChecker = appStorage.availabilityChecker
                 ) as T
             }
         }
@@ -155,36 +136,10 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        appDatabase = SqliteAppDatabase.createAndroid(applicationContext)
-        documentStore = SqlitePdfDocumentStore(appDatabase)
-
-        // One-time idempotent migration from legacy DataStore Preferences -> SQLite
-        runBlocking(Dispatchers.IO) {
-            runCatching {
-                LegacyDataStoreMigrator(
-                    legacyReader = DataStoreLegacyReader(applicationContext),
-                    documentStore = documentStore
-                ).migrateIfNeeded()
-            }
-        }
-
-        recentsRepository = SqliteRecentsRepository(documentStore)
-        favoriteFoldersRepository = SqliteFavoriteFoldersRepository(applicationContext, documentStore)
-        availabilityChecker = AndroidDocumentAvailabilityChecker(applicationContext)
-
-        val appVersion = try {
-            packageManager.getPackageInfo(packageName, 0).versionName ?: "1.0.0"
-        } catch (_: Exception) {
-            "1.0.0"
-        }
-        backupRepository = SqliteBackupRepository(
-            database = appDatabase,
-            documentStore = documentStore,
-            validator = SqliteBackupValidator(appDatabase),
-            fileGateway = AndroidSafBackupFileGateway(applicationContext),
-            stagingDirectory = cacheDir,
-            appVersion = appVersion
-        )
+        appStorage = PdfReaderAppStorage.getInstance(applicationContext)
+        pendingRelinkDocumentId = savedInstanceState
+            ?.getString(KEY_PENDING_RELINK_DOC_ID)
+            ?.takeIf { it.isNotBlank() }
 
         val restoredReaderUri = savedInstanceState
             ?.getString(KEY_ACTIVE_READER_URI)
@@ -315,6 +270,21 @@ class MainActivity : ComponentActivity() {
                         )
                     }
                 }
+
+                homeViewState.relinkConflict?.let { conflict ->
+                    RelinkConflictDialog(
+                        conflict = conflict,
+                        onConsolidate = {
+                            homeViewModel.onIntent(HomeIntent.ConfirmConsolidateRelinkConflict)
+                        },
+                        onOpenExisting = {
+                            homeViewModel.onIntent(HomeIntent.OpenExistingFromRelinkConflict)
+                        },
+                        onDismiss = {
+                            homeViewModel.onIntent(HomeIntent.DismissRelinkConflict)
+                        }
+                    )
+                }
             }
         }
     }
@@ -327,18 +297,14 @@ class MainActivity : ComponentActivity() {
         hasCompletedInitialResume = true
     }
 
-    override fun onDestroy() {
-        super.onDestroy()
-        if (::appDatabase.isInitialized) {
-            appDatabase.close()
-        }
-    }
-
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
         val screen = currentScreenState.value
         if (screen is AppScreen.Reader) {
             outState.putString(KEY_ACTIVE_READER_URI, screen.uri.toString())
+        }
+        pendingRelinkDocumentId?.takeIf { it.isNotBlank() }?.let {
+            outState.putString(KEY_PENDING_RELINK_DOC_ID, it)
         }
     }
 
@@ -353,6 +319,7 @@ class MainActivity : ComponentActivity() {
 
     companion object {
         private const val KEY_ACTIVE_READER_URI = "active_reader_uri"
+        private const val KEY_PENDING_RELINK_DOC_ID = "pending_relink_document_id"
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {

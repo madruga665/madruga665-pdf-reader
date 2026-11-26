@@ -7,6 +7,7 @@ import com.madruga665.pdfreader.core.model.FavoriteFolder
 import com.madruga665.pdfreader.core.model.PdfDocumentRecord
 import com.madruga665.pdfreader.core.model.ReadingSession
 import com.madruga665.pdfreader.core.model.SpeedPreset
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.After
@@ -238,5 +239,128 @@ class SqlitePdfDocumentStoreTest {
 
         assertNull(store.findCustomSpeedByFileName("shared.pdf"))
         assertNotEquals("", doc.id)
+    }
+
+    @Test
+    fun `clearCustomDocumentSpeed resets preferredSpeedPxPerSec to global default speed in SQLite`() = runTest {
+        store.setGlobalDefaultSpeed(115.0f)
+        val uri = "content://docs/reset_speed.pdf"
+        store.registerOrOpenDocument(uri, "reset_speed.pdf", 10, 1000L)
+        store.saveCustomDocumentSpeed(uri, 190.0f)
+
+        assertEquals(190.0f, store.getByUri(uri)!!.preferredSpeedPxPerSec, 0.001f)
+        assertEquals(190.0f, store.getByUri(uri)!!.customDefaultSpeedPxPerSec ?: 0f, 0.001f)
+
+        store.clearCustomDocumentSpeed(uri)
+
+        val afterClear = store.getByUri(uri)!!
+        assertNull(afterClear.customDefaultSpeedPxPerSec)
+        assertEquals(115.0f, afterClear.preferredSpeedPxPerSec, 0.001f)
+
+        val reopened = store.registerOrOpenDocument(uri, "reset_speed.pdf", 10, 2000L)
+        assertNull(reopened.customDefaultSpeedPxPerSec)
+        assertEquals(115.0f, reopened.preferredSpeedPxPerSec, 0.001f)
+    }
+
+    @Test
+    fun `replaceDatabaseSnapshot preserves original id when newer duplicate documentUri has same id`() = runTest {
+        val originalId = "11111111-1111-4111-8111-111111111111"
+        val older = PdfDocumentRecord.createSanitized(
+            id = originalId,
+            documentUri = "content://docs/dup.pdf",
+            fileName = "dup.pdf",
+            pageCount = 10,
+            currentPageIndex = 1,
+            lastAccessedAt = 1000L
+        )
+        val newer = PdfDocumentRecord.createSanitized(
+            id = originalId,
+            documentUri = "content://docs/dup.pdf",
+            fileName = "dup.pdf",
+            pageCount = 10,
+            currentPageIndex = 7,
+            lastAccessedAt = 5000L
+        )
+
+        store.replaceDatabaseSnapshot(
+            globalDefaultSpeedPxPerSec = 90.0f,
+            documents = listOf(older, newer),
+            favoriteFolders = emptyList(),
+            nowMillis = 6000L
+        )
+
+        val stored = store.getAllDocumentsSnapshot()
+        assertEquals(1, stored.size)
+        assertEquals(originalId, stored[0].id)
+        assertEquals(7, stored[0].currentPageIndex)
+    }
+
+    @Test
+    fun `awaitReady suspends queries until legacy migration completes without deadlock`() = runTest {
+        val gate = kotlinx.coroutines.CompletableDeferred<Unit>()
+        val gatedDbFile = tempFolder.newFile("gated_migration.db")
+        val gatedDb = SqliteAppDatabase(JdbcSqliteDriver(gatedDbFile))
+        try {
+            val gatedStore = SqlitePdfDocumentStore(
+                database = gatedDb,
+                awaitReady = { gate.await() }
+            )
+            val legacyReader = object : LegacyDataStoreReader {
+                override suspend fun readSnapshot(): LegacyMigrationSnapshot = LegacyMigrationSnapshot(
+                    hasAnyLegacyData = true,
+                    globalDefaultSpeedPxPerSec = 135.0f,
+                    sessions = listOf(
+                        ReadingSession(
+                            documentUri = "content://legacy/doc.pdf",
+                            currentPageIndex = 3,
+                            normalizedScrollRatio = 0.3f,
+                            zoomScale = 1.25f,
+                            preferredSpeedPxPerSec = 135.0f,
+                            customDefaultSpeedPxPerSec = 170.0f,
+                            lastReadTimestamp = 5000L,
+                            fileName = "legacy.pdf"
+                        )
+                    ),
+                    recents = listOf(
+                        com.madruga665.pdfreader.core.model.RecentDocument(
+                            uri = "content://legacy/doc.pdf",
+                            fileName = "legacy.pdf",
+                            pageCount = 10,
+                            lastReadPageIndex = 3,
+                            progressRatio = 0.3f,
+                            lastAccessedTimestamp = 5000L
+                        )
+                    ),
+                    favoriteFolders = emptyList()
+                )
+            }
+
+            val queryDeferred = async {
+                gatedStore.getAllDocumentsSnapshot()
+            }
+            val recentsDeferred = async {
+                gatedStore.observeRecents().first()
+            }
+            kotlinx.coroutines.yield()
+            assertFalse(queryDeferred.isCompleted)
+            assertFalse(recentsDeferred.isCompleted)
+
+            // Migration must run while gate is still incomplete (no deadlock!)
+            try {
+                LegacyDataStoreMigrator(legacyReader, gatedStore).migrateIfNeeded()
+            } finally {
+                gate.complete(Unit)
+            }
+
+            val docs = queryDeferred.await()
+            val recents = recentsDeferred.await()
+            assertEquals(1, docs.size)
+            assertEquals("content://legacy/doc.pdf", docs[0].documentUri)
+            assertEquals(170.0f, docs[0].customDefaultSpeedPxPerSec ?: 0f, 0.001f)
+            assertEquals(1, recents.size)
+            assertEquals("content://legacy/doc.pdf", recents[0].documentUri)
+        } finally {
+            gatedDb.close()
+        }
     }
 }

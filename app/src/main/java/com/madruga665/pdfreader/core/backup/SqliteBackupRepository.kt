@@ -37,7 +37,7 @@ class SqliteBackupRepository(
         } catch (e: Exception) {
             Result.failure(e)
         } finally {
-            runCatching { stagingFile.delete() }
+            deleteStagingFiles(stagingFile)
         }
     }
 
@@ -58,8 +58,14 @@ class SqliteBackupRepository(
             }
             validator.validateAndRead(stagingFile)
         } finally {
-            runCatching { stagingFile.delete() }
+            deleteStagingFiles(stagingFile)
         }
+    }
+
+    private fun deleteStagingFiles(stagingFile: File) {
+        runCatching { stagingFile.delete() }
+        runCatching { File("${stagingFile.path}-wal").delete() }
+        runCatching { File("${stagingFile.path}-shm").delete() }
     }
 
     override suspend fun restoreBackup(

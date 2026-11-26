@@ -54,21 +54,43 @@ object BackupMerger {
         merged.addAll(deduplicateDocuments(local))
 
         for (inc in deduplicateDocuments(incoming)) {
-            val matchIndex = merged.indexOfFirst { existing ->
+            val matchingIndices = merged.indices.filter { idx ->
+                val existing = merged[idx]
                 existing.id == inc.id || existing.documentUri == inc.documentUri
             }
-            if (matchIndex == -1) {
+            if (matchingIndices.isEmpty()) {
                 merged.add(inc)
             } else {
-                val existing = merged[matchIndex]
-                val winner = if (inc.lastAccessedAt > existing.lastAccessedAt) inc else existing
-                val loser = if (winner === inc) existing else inc
-                merged[matchIndex] = winner.copy(
-                    id = existing.id, // Preserve stable local identity on collision
-                    customDefaultSpeedPxPerSec = winner.customDefaultSpeedPxPerSec ?: loser.customDefaultSpeedPxPerSec,
-                    fileName = winner.fileName.ifBlank { loser.fileName },
-                    isInRecents = existing.isInRecents || inc.isInRecents
+                val colliding = matchingIndices.map { merged[it] }
+                val candidates = colliding + inc
+
+                // Prefer local record on timestamp tie
+                val winner = candidates.reduce { best, candidate ->
+                    if (candidate.lastAccessedAt > best.lastAccessedAt) candidate else best
+                }
+                val stableId = colliding.firstOrNull { it.id == winner.id }?.id
+                    ?: colliding.firstOrNull { it.id == inc.id }?.id
+                    ?: colliding.first().id
+
+                val sortedByRecency = candidates.sortedByDescending { it.lastAccessedAt }
+                val resolvedCustomSpeed = winner.customDefaultSpeedPxPerSec
+                    ?: sortedByRecency.firstNotNullOfOrNull { it.customDefaultSpeedPxPerSec }
+                val resolvedFileName = winner.fileName.ifBlank {
+                    sortedByRecency.firstNotNullOfOrNull { it.fileName.takeIf(String::isNotBlank) }
+                        ?: PdfDocumentRecord.DEFAULT_FILE_NAME
+                }
+                val resolvedIsInRecents = candidates.any { it.isInRecents }
+
+                merged[matchingIndices.first()] = winner.copy(
+                    id = stableId,
+                    customDefaultSpeedPxPerSec = resolvedCustomSpeed,
+                    fileName = resolvedFileName,
+                    isInRecents = resolvedIsInRecents
                 )
+
+                for (extraIndex in matchingIndices.drop(1).asReversed()) {
+                    merged.removeAt(extraIndex)
+                }
             }
         }
 

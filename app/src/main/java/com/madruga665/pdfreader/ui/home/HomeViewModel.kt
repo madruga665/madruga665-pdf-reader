@@ -124,7 +124,12 @@ class HomeViewModel(
         viewModelScope.launch {
             val target = store.getById(documentId)
             if (target == null) {
-                _viewState.update { it.copy(errorMessage = "Registro do PDF não encontrado no banco local.") }
+                _sideEffects.send(
+                    HomeSideEffect.ShowToast(
+                        message = "Registro do PDF não encontrado no banco local.",
+                        isLong = true
+                    )
+                )
                 return@launch
             }
 
@@ -132,11 +137,12 @@ class HomeViewModel(
             checker.takePersistableReadPermission(newUriString)
 
             val metadata = checker.inspectPdf(newUriString).getOrElse { error ->
-                _viewState.update {
-                    it.copy(
-                        errorMessage = "Não foi possível restaurar o PDF: ${error.localizedMessage ?: "arquivo inválido ou corrompido"}"
+                _sideEffects.send(
+                    HomeSideEffect.ShowToast(
+                        message = "Não foi possível restaurar o PDF: ${error.localizedMessage ?: "arquivo inválido ou corrompido"}",
+                        isLong = true
                     )
-                }
+                )
                 return@launch
             }
 
@@ -149,7 +155,12 @@ class HomeViewModel(
                 )
             ) {
                 is RelinkOutcome.InvalidTarget -> {
-                    _viewState.update { it.copy(errorMessage = outcome.message) }
+                    _sideEffects.send(
+                        HomeSideEffect.ShowToast(
+                            message = outcome.message,
+                            isLong = true
+                        )
+                    )
                 }
 
                 is RelinkOutcome.UriConflict -> {
@@ -179,11 +190,12 @@ class HomeViewModel(
                             _sideEffects.send(HomeSideEffect.NavigateToReader(newUri))
                         },
                         onFailure = { err ->
-                            _viewState.update {
-                                it.copy(
-                                    errorMessage = "Falha ao atualizar vínculo do PDF: ${err.localizedMessage ?: "erro inesperado"}"
+                            _sideEffects.send(
+                                HomeSideEffect.ShowToast(
+                                    message = "Falha ao atualizar vínculo do PDF: ${err.localizedMessage ?: "erro inesperado"}",
+                                    isLong = true
                                 )
-                            }
+                            )
                         }
                     )
                 }
@@ -208,11 +220,12 @@ class HomeViewModel(
                     _sideEffects.send(HomeSideEffect.NavigateToReader(Uri.parse(conflict.newUri)))
                 },
                 onFailure = { error ->
-                    _viewState.update {
-                        it.copy(
-                            errorMessage = "Não foi possível consolidar o PDF: ${error.localizedMessage ?: "erro inesperado"}"
+                    _sideEffects.send(
+                        HomeSideEffect.ShowToast(
+                            message = "Não foi possível consolidar o PDF: ${error.localizedMessage ?: "erro inesperado"}",
+                            isLong = true
                         )
-                    }
+                    )
                 }
             )
         }
