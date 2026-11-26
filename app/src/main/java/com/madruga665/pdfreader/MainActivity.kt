@@ -28,6 +28,7 @@ import com.madruga665.pdfreader.core.home.AndroidFavoriteFoldersRepository
 import com.madruga665.pdfreader.core.home.DataStoreRecentsRepository
 import com.madruga665.pdfreader.core.home.FavoriteFoldersRepository
 import com.madruga665.pdfreader.core.home.RecentsRepository
+import com.madruga665.pdfreader.core.model.ReaderErrorState
 import com.madruga665.pdfreader.core.repository.AndroidPdfDocumentRepository
 import com.madruga665.pdfreader.core.storage.DataStoreReadingSessionStore
 import com.madruga665.pdfreader.ui.components.AdaptiveReaderScaffold
@@ -43,7 +44,6 @@ import com.madruga665.pdfreader.ui.theme.PdfReaderTheme
 
 class MainActivity : ComponentActivity() {
 
-    private lateinit var repository: AndroidPdfDocumentRepository
     private lateinit var sessionStore: DataStoreReadingSessionStore
     private lateinit var recentsRepository: RecentsRepository
     private lateinit var favoriteFoldersRepository: FavoriteFoldersRepository
@@ -54,7 +54,7 @@ class MainActivity : ComponentActivity() {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
                 return ReaderViewModel(
-                    repository = repository,
+                    repository = AndroidPdfDocumentRepository(applicationContext),
                     sessionStore = sessionStore,
                     recentsRepository = recentsRepository
                 ) as T
@@ -75,7 +75,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private var currentScreenState = mutableStateOf<AppScreen>(AppScreen.Home)
+    private val currentScreenState = mutableStateOf<AppScreen>(AppScreen.Home)
 
     private val openDocumentLauncher = registerForActivityResult(
         ActivityResultContracts.OpenDocument()
@@ -127,7 +127,6 @@ class MainActivity : ComponentActivity() {
     @OptIn(ExperimentalMaterial3WindowSizeClassApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        repository = AndroidPdfDocumentRepository(applicationContext)
         sessionStore = DataStoreReadingSessionStore(applicationContext)
         recentsRepository = DataStoreRecentsRepository(applicationContext)
         favoriteFoldersRepository = AndroidFavoriteFoldersRepository(applicationContext)
@@ -144,10 +143,23 @@ class MainActivity : ComponentActivity() {
             appVersion = appVersion
         )
 
-        // Handle incoming PDF intent from other applications
-        intent?.data?.let { uri ->
-            currentScreenState.value = AppScreen.Reader(uri)
-            readerViewModel.onIntent(ReaderIntent.OpenDocument(uri))
+        val restoredReaderUri = savedInstanceState
+            ?.getString(KEY_ACTIVE_READER_URI)
+            ?.takeIf { it.isNotBlank() }
+            ?.let(Uri::parse)
+
+        if (restoredReaderUri != null) {
+            currentScreenState.value = AppScreen.Reader(restoredReaderUri)
+            val readerState = readerViewModel.viewState.value
+            if (readerState.document == null && !readerState.isLoading && readerState.error is ReaderErrorState.None) {
+                readerViewModel.onIntent(ReaderIntent.OpenDocument(restoredReaderUri))
+            }
+        } else if (savedInstanceState == null) {
+            // Handle incoming PDF intent from other applications
+            intent?.data?.let { uri ->
+                currentScreenState.value = AppScreen.Reader(uri)
+                readerViewModel.onIntent(ReaderIntent.OpenDocument(uri))
+            }
         }
 
         setContent {
@@ -229,7 +241,7 @@ class MainActivity : ComponentActivity() {
                         AdaptiveReaderScaffold(
                             viewState = readerViewState,
                             windowWidthSizeClass = windowSizeClass.widthSizeClass,
-                            repository = repository,
+                            repository = readerViewModel.repository,
                             autoScrollEngine = readerViewModel.autoScrollEngine,
                             onIntent = readerViewModel::onIntent,
                             onOpenFilePicker = {
@@ -246,6 +258,14 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        val screen = currentScreenState.value
+        if (screen is AppScreen.Reader) {
+            outState.putString(KEY_ACTIVE_READER_URI, screen.uri.toString())
+        }
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
@@ -253,6 +273,10 @@ class MainActivity : ComponentActivity() {
             currentScreenState.value = AppScreen.Reader(uri)
             readerViewModel.onIntent(ReaderIntent.OpenDocument(uri))
         }
+    }
+
+    companion object {
+        private const val KEY_ACTIVE_READER_URI = "active_reader_uri"
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {

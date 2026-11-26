@@ -25,6 +25,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.madruga665.pdfreader.ui.theme.NeobrutalismMetrics
@@ -48,8 +49,9 @@ fun HomeEmptyState(
     ) {
         NeobrutalistCard(
             modifier = Modifier
+                .widthIn(max = 440.dp)
                 .fillMaxWidth()
-                .widthIn(max = 440.dp),
+                .testTag("home_empty_state_card"),
             containerColor = colors.surface,
             borderColor = colors.border,
             shadowColor = colors.shadow,

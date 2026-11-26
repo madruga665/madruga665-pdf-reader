@@ -435,8 +435,8 @@ fun NeobrutalistDialog(
         ) {
             NeobrutalistCard(
                 modifier = modifier
-                    .fillMaxWidth()
-                    .widthIn(max = 480.dp),
+                    .widthIn(max = 480.dp)
+                    .fillMaxWidth(),
                 containerColor = colors.surface,
                 borderColor = colors.border,
                 shadowColor = colors.shadow,

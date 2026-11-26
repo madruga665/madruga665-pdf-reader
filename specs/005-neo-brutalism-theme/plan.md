@@ -51,30 +51,34 @@ specs/005-neo-brutalism-theme/
 ### Source Code (repository root)
 
 ```text
-app/src/main/java/com/madruga665/pdfreader/
-├── MainActivity.kt                             # INALTERADO (mantém PdfReaderTheme { ... } e atalhos/launchers)
-├── core/                                       # INALTERADO (zero impacto em domínio, engine, backup ou DataStore)
-└── ui/
-    ├── theme/
-    │   ├── Color.kt                            # UPDATE: NeobrutalismColors, Light & Catppuccin Mocha palettes, NeobrutalismFolderAccent
-    │   ├── Type.kt                             # UPDATE: NeobrutalismTypography (SansSerif, Bold/ExtraBold hierarchy)
-    │   ├── Modifiers.kt                        # NEW: NeobrutalismMetrics, neobrutalistShadow, neobrutalistGridBackground
-    │   └── Theme.kt                            # UPDATE: LocalNeobrutalismColors, NeobrutalismTheme, PdfReaderTheme (sem dynamicColor + system bars)
-    ├── components/
-    │   ├── NeobrutalistPrimitives.kt           # NEW: NeobrutalistButton, IconButton, Badge, Card, Dialog, ProgressBar, SnackbarHost
-    │   ├── HomeEmptyState.kt                   # UPDATE: Cartão opaco Neo-Brutalism + botões táteis
-    │   ├── RecentDocumentCard.kt               # UPDATE: Superfície 100% opaca, sombra dura, barra Neo-Brutalism
-    │   ├── FavoriteFolderCard.kt               # UPDATE: Visual de fichário com aba colorida, caixa de ícone, badge e dropdown opaco
-    │   ├── AdaptiveReaderScaffold.kt           # UPDATE: TopAppBar com badge Page X of Y, painel lateral expandido opaco, surround neutro sem grid
-    │   ├── FloatingAutoScrollOverlay.kt        # UPDATE: Painel opaco sem blur, Play/Pause contrastado pausado vs ativo
-    │   ├── SpeedSelectorControl.kt             # UPDATE: Chips, -/+, slider, badge px/s, badge padrão salvo e botões sem clipping
-    │   ├── BackupDialogs.kt                    # UPDATE: Migrar BackupActionsDialog e RestorePreviewDialog para NeobrutalistDialog
-    │   ├── FolderContentsDialog.kt             # UPDATE: Migrar para NeobrutalistDialog com lista delimitada e Unpin destrutivo
-    │   ├── ErrorDialog.kt                      # UPDATE: Migrar para NeobrutalistDialog com destaque semântico de erro
-    │   ├── PdfDocumentViewport.kt              # AUDIT ONLY: Manter renderização/gestos/auto-scroll 100% intactos (RN-03)
-    │   └── PdfPageItem.kt                      # AUDIT ONLY: Manter bitmaps PDF intactos; loading herda tema atualizado (RN-03)
-    └── home/
-        └── HomeScreen.kt                       # UPDATE: Grid 24dp fixo, TopAppBar estilizada, SectionHeader com badge, FAB/ExtendedFAB tátil, SnackbarHost
+app/src/main/
+├── AndroidManifest.xml                         # UPDATE: Inclui uiMode em configChanges para troca imediata de tema sem recriar Activity
+└── java/com/madruga665/pdfreader/
+    ├── MainActivity.kt                         # UPDATE: Reutiliza readerViewModel.repository e preserva currentScreenState via onSaveInstanceState
+    ├── core/                                   # INALTERADO (zero impacto em domínio, engine, backup ou DataStore)
+    └── ui/
+        ├── reader/
+        │   └── ReaderViewModel.kt              # UPDATE: Expõe val repository para compartilhamento seguro com a Activity
+        ├── theme/
+        │   ├── Color.kt                        # UPDATE: NeobrutalismColors, Light & Catppuccin Mocha palettes, NeobrutalismFolderAccent
+        │   ├── Type.kt                         # UPDATE: NeobrutalismTypography (SansSerif, Bold/ExtraBold hierarchy)
+        │   ├── Modifiers.kt                    # NEW: NeobrutalismMetrics, neobrutalistShadow, neobrutalistGridBackground
+        │   └── Theme.kt                        # UPDATE: LocalNeobrutalismColors, NeobrutalismTheme, PdfReaderTheme (sem dynamicColor + system bars)
+        ├── components/
+        │   ├── NeobrutalistPrimitives.kt       # NEW: NeobrutalistButton, IconButton, Badge, Card, Dialog, ProgressBar, SnackbarHost
+        │   ├── HomeEmptyState.kt               # UPDATE: Cartão opaco Neo-Brutalism + botões táteis
+        │   ├── RecentDocumentCard.kt           # UPDATE: Superfície 100% opaca, sombra dura, barra Neo-Brutalism
+        │   ├── FavoriteFolderCard.kt           # UPDATE: Visual de fichário com aba colorida, caixa de ícone, badge e dropdown opaco
+        │   ├── AdaptiveReaderScaffold.kt       # UPDATE: TopAppBar com badge Page X of Y, painel lateral expandido opaco, surround neutro sem grid
+        │   ├── FloatingAutoScrollOverlay.kt    # UPDATE: Painel opaco sem blur, Play/Pause contrastado pausado vs ativo
+        │   ├── SpeedSelectorControl.kt         # UPDATE: Chips, -/+, slider, badge px/s, badge padrão salvo e botões sem clipping
+        │   ├── BackupDialogs.kt                # UPDATE: Migrar BackupActionsDialog e RestorePreviewDialog para NeobrutalistDialog
+        │   ├── FolderContentsDialog.kt         # UPDATE: Migrar para NeobrutalistDialog com lista delimitada e Unpin destrutivo
+        │   ├── ErrorDialog.kt                  # UPDATE: Migrar para NeobrutalistDialog com destaque semântico de erro
+        │   ├── PdfDocumentViewport.kt          # AUDIT ONLY: Manter renderização/gestos/auto-scroll 100% intactos (RN-03)
+        │   └── PdfPageItem.kt                  # AUDIT ONLY: Manter bitmaps PDF intactos; loading herda tema atualizado (RN-03)
+        └── home/
+            └── HomeScreen.kt                   # UPDATE: Grid 24dp fixo, TopAppBar estilizada, SectionHeader com badge, FAB/ExtendedFAB tátil, SnackbarHost
 
 app/src/test/java/com/madruga665/pdfreader/
 └── ui/

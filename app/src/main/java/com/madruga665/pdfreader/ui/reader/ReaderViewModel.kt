@@ -25,7 +25,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 class ReaderViewModel(
-    private val repository: PdfDocumentRepository,
+    val repository: PdfDocumentRepository,
     private val sessionStore: ReadingSessionStore,
     private val recentsRepository: RecentsRepository? = null,
     val autoScrollEngine: AutoScrollEngine = DefaultAutoScrollEngine()

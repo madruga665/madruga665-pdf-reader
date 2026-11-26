@@ -37,6 +37,7 @@ import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -278,8 +279,9 @@ fun AdaptiveReaderScaffold(
                 ) {
                     NeobrutalistCard(
                         modifier = Modifier
+                            .widthIn(max = 380.dp)
                             .fillMaxWidth()
-                            .widthIn(max = 380.dp),
+                            .testTag("reader_empty_state_card"),
                         containerColor = colors.surface
                     ) {
                         Column(
