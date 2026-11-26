@@ -62,7 +62,7 @@
 ### Implementation for User Story 2
 
 - [x] T015 [US2] Implementar `LegacyDataStoreReader.kt` (lendo somente as chaves legadas dos 3 DataStores) e `LegacyDataStoreMigrator.kt` em `app/src/main/java/com/madruga665/pdfreader/core/storage/` executando em transação única e gravando `datastore_migration_completed = "1"`
-- [ ] T016 [US2] Integrar execução da migração única na inicialização em `MainActivity.kt` antes de expor fluxos de leitura às telas
+- [x] T016 [US2] Integrar execução da migração única na inicialização em `MainActivity.kt` antes de expor fluxos de leitura às telas
 
 **Checkpoint**: Dados legados migrados automaticamente e sem duplicação entre reinicializações.
 
@@ -76,15 +76,15 @@
 
 ### Tests for User Story 3 (TDD First)
 
-- [ ] T017 [P] [US3] Escrever `DocumentRelinkPolicyTest.kt` em `app/src/test/java/com/madruga665/pdfreader/core/documents/` validando preservação de `id`, ajuste seguro de página (`RN-04`: `savedPage = 5`, `newPageCount = 3` -> `2`), detecção de conflito de URI (`RN-05`) e consolidação
-- [ ] T018 [P] [US3] Atualizar `HomeViewModelTest.kt` cobrindo detecção de indisponibilidade, `RequestRelinkPdf`, `CompleteRelinkPdf`, cancelamento, arquivo inválido (`CA-06`), conflito de URI (`CA-07`) e remoção explícita de indisponível (`RF-08`)
+- [x] T017 [P] [US3] Escrever `DocumentRelinkPolicyTest.kt` em `app/src/test/java/com/madruga665/pdfreader/core/documents/` validando preservação de `id`, ajuste seguro de página (`RN-04`: `savedPage = 5`, `newPageCount = 3` -> `2`), detecção de conflito de URI (`RN-05`) e consolidação
+- [x] T018 [P] [US3] Atualizar `HomeViewModelTest.kt` cobrindo detecção de indisponibilidade, `RequestRelinkPdf`, `CompleteRelinkPdf`, cancelamento, arquivo inválido (`CA-06`), conflito de URI (`CA-07`) e remoção explícita de indisponível (`RF-08`)
 
 ### Implementation for User Story 3
 
-- [ ] T019 [US3] Implementar `DocumentAvailabilityChecker.kt` e `DocumentRelinkPolicy.kt` em `app/src/main/java/com/madruga665/pdfreader/core/documents/`
-- [ ] T020 [US3] Atualizar `HomeIntent.kt`, `HomeViewState.kt`, `HomeSideEffect.kt` e `HomeViewModel.kt` com revalidação de disponibilidade, revinculação e tratamento de conflitos
-- [ ] T021 [US3] Atualizar `RecentDocumentCard.kt` (badge `"Arquivo indisponível"` + botão `"Restaurar PDF"` + botão remover), `ErrorDialog.kt` (botão `"Restaurar PDF"` em `FileNotFound` cadastrado), `HomeScreen.kt` e adicionar `RelinkConflictDialog` (seguindo tema Neo-Brutalism Claro/Escuro)
-- [ ] T022 [US3] Conectar `ActivityResultContracts.OpenDocument` para revinculação e revalidação automática de disponibilidade em `ON_RESUME` na `MainActivity.kt`
+- [x] T019 [US3] Implementar `DocumentAvailabilityChecker.kt` e `DocumentRelinkPolicy.kt` em `app/src/main/java/com/madruga665/pdfreader/core/documents/`
+- [x] T020 [US3] Atualizar `HomeIntent.kt`, `HomeViewState.kt`, `HomeSideEffect.kt` e `HomeViewModel.kt` com revalidação de disponibilidade, revinculação e tratamento de conflitos
+- [x] T021 [US3] Atualizar `RecentDocumentCard.kt` (badge `"Arquivo indisponível"` + botão `"Restaurar PDF"` + botão remover), `ErrorDialog.kt` (botão `"Restaurar PDF"` em `FileNotFound` cadastrado), `HomeScreen.kt` e adicionar `RelinkConflictDialog` (seguindo tema Neo-Brutalism Claro/Escuro)
+- [x] T022 [US3] Conectar `ActivityResultContracts.OpenDocument` para revinculação e revalidação automática de disponibilidade em `ON_RESUME` na `MainActivity.kt`
 
 **Checkpoint**: PDFs movidos, renomeados ou apagados não geram crash e podem ser restaurados ou removidos com fluidez.
 

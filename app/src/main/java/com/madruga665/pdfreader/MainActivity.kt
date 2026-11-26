@@ -24,13 +24,19 @@ import com.madruga665.pdfreader.core.backup.AndroidSafBackupFileGateway
 import com.madruga665.pdfreader.core.backup.BackupJsonCodec
 import com.madruga665.pdfreader.core.backup.BackupRepository
 import com.madruga665.pdfreader.core.backup.DefaultBackupRepository
-import com.madruga665.pdfreader.core.home.AndroidFavoriteFoldersRepository
-import com.madruga665.pdfreader.core.home.DataStoreRecentsRepository
+import com.madruga665.pdfreader.core.database.SqliteAppDatabase
+import com.madruga665.pdfreader.core.documents.AndroidDocumentAvailabilityChecker
+import com.madruga665.pdfreader.core.documents.DocumentAvailabilityChecker
 import com.madruga665.pdfreader.core.home.FavoriteFoldersRepository
 import com.madruga665.pdfreader.core.home.RecentsRepository
+import com.madruga665.pdfreader.core.home.SqliteFavoriteFoldersRepository
+import com.madruga665.pdfreader.core.home.SqliteRecentsRepository
 import com.madruga665.pdfreader.core.model.ReaderErrorState
 import com.madruga665.pdfreader.core.repository.AndroidPdfDocumentRepository
-import com.madruga665.pdfreader.core.storage.DataStoreReadingSessionStore
+import com.madruga665.pdfreader.core.storage.DataStoreLegacyReader
+import com.madruga665.pdfreader.core.storage.LegacyDataStoreMigrator
+import com.madruga665.pdfreader.core.storage.PdfDocumentStore
+import com.madruga665.pdfreader.core.storage.SqlitePdfDocumentStore
 import com.madruga665.pdfreader.ui.components.AdaptiveReaderScaffold
 import com.madruga665.pdfreader.ui.home.HomeIntent
 import com.madruga665.pdfreader.ui.home.HomeScreen
@@ -41,13 +47,20 @@ import com.madruga665.pdfreader.ui.reader.ReaderIntent
 import com.madruga665.pdfreader.ui.reader.ReaderSideEffect
 import com.madruga665.pdfreader.ui.reader.ReaderViewModel
 import com.madruga665.pdfreader.ui.theme.PdfReaderTheme
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runBlocking
 
 class MainActivity : ComponentActivity() {
 
-    private lateinit var sessionStore: DataStoreReadingSessionStore
+    private lateinit var appDatabase: SqliteAppDatabase
+    private lateinit var documentStore: PdfDocumentStore
     private lateinit var recentsRepository: RecentsRepository
     private lateinit var favoriteFoldersRepository: FavoriteFoldersRepository
+    private lateinit var availabilityChecker: DocumentAvailabilityChecker
     private lateinit var backupRepository: BackupRepository
+
+    private var pendingRelinkDocumentId: String? = null
+    private var hasCompletedInitialResume = false
 
     private val readerViewModel: ReaderViewModel by viewModels {
         object : ViewModelProvider.Factory {
@@ -55,7 +68,7 @@ class MainActivity : ComponentActivity() {
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
                 return ReaderViewModel(
                     repository = AndroidPdfDocumentRepository(applicationContext),
-                    sessionStore = sessionStore,
+                    sessionStore = documentStore,
                     recentsRepository = recentsRepository
                 ) as T
             }
@@ -69,7 +82,9 @@ class MainActivity : ComponentActivity() {
                 return HomeViewModel(
                     recentsRepository = recentsRepository,
                     favoriteFoldersRepository = favoriteFoldersRepository,
-                    backupRepository = backupRepository
+                    backupRepository = backupRepository,
+                    documentStore = documentStore,
+                    availabilityChecker = availabilityChecker
                 ) as T
             }
         }
@@ -86,10 +101,21 @@ class MainActivity : ComponentActivity() {
                     it,
                     Intent.FLAG_GRANT_READ_URI_PERMISSION
                 )
-            } catch (_: Exception) {}
+            } catch (_: Exception) {
+            }
 
             currentScreenState.value = AppScreen.Reader(it)
             readerViewModel.onIntent(ReaderIntent.OpenDocument(it))
+        }
+    }
+
+    private val relinkPdfLauncher = registerForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? ->
+        val docId = pendingRelinkDocumentId
+        pendingRelinkDocumentId = null
+        if (docId != null && uri != null) {
+            homeViewModel.onIntent(HomeIntent.CompleteRelinkPdf(docId, uri))
         }
     }
 
@@ -102,7 +128,8 @@ class MainActivity : ComponentActivity() {
                     it,
                     Intent.FLAG_GRANT_READ_URI_PERMISSION
                 )
-            } catch (_: Exception) {}
+            } catch (_: Exception) {
+            }
 
             homeViewModel.onIntent(HomeIntent.AddFolder(it))
         }
@@ -127,16 +154,31 @@ class MainActivity : ComponentActivity() {
     @OptIn(ExperimentalMaterial3WindowSizeClassApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        sessionStore = DataStoreReadingSessionStore(applicationContext)
-        recentsRepository = DataStoreRecentsRepository(applicationContext)
-        favoriteFoldersRepository = AndroidFavoriteFoldersRepository(applicationContext)
+
+        appDatabase = SqliteAppDatabase.createAndroid(applicationContext)
+        documentStore = SqlitePdfDocumentStore(appDatabase)
+
+        // One-time idempotent migration from legacy DataStore Preferences -> SQLite
+        runBlocking(Dispatchers.IO) {
+            runCatching {
+                LegacyDataStoreMigrator(
+                    legacyReader = DataStoreLegacyReader(applicationContext),
+                    documentStore = documentStore
+                ).migrateIfNeeded()
+            }
+        }
+
+        recentsRepository = SqliteRecentsRepository(documentStore)
+        favoriteFoldersRepository = SqliteFavoriteFoldersRepository(applicationContext, documentStore)
+        availabilityChecker = AndroidDocumentAvailabilityChecker(applicationContext)
+
         val appVersion = try {
             packageManager.getPackageInfo(packageName, 0).versionName ?: "1.0.0"
         } catch (_: Exception) {
             "1.0.0"
         }
         backupRepository = DefaultBackupRepository(
-            sessionStore = sessionStore,
+            sessionStore = documentStore,
             recentsRepository = recentsRepository,
             favoriteFoldersRepository = favoriteFoldersRepository,
             fileGateway = AndroidSafBackupFileGateway(applicationContext),
@@ -155,7 +197,6 @@ class MainActivity : ComponentActivity() {
                 readerViewModel.onIntent(ReaderIntent.OpenDocument(restoredReaderUri))
             }
         } else if (savedInstanceState == null) {
-            // Handle incoming PDF intent from other applications
             intent?.data?.let { uri ->
                 currentScreenState.value = AppScreen.Reader(uri)
                 readerViewModel.onIntent(ReaderIntent.OpenDocument(uri))
@@ -175,9 +216,15 @@ class MainActivity : ComponentActivity() {
                             currentScreen = AppScreen.Reader(effect.uri)
                             readerViewModel.onIntent(ReaderIntent.OpenDocument(effect.uri))
                         }
+
                         is HomeSideEffect.ShowToast -> {
                             val duration = if (effect.isLong) Toast.LENGTH_LONG else Toast.LENGTH_SHORT
                             Toast.makeText(this@MainActivity, effect.message, duration).show()
+                        }
+
+                        is HomeSideEffect.LaunchRelinkPdfPicker -> {
+                            pendingRelinkDocumentId = effect.documentId
+                            relinkPdfLauncher.launch(arrayOf("application/pdf"))
                         }
                     }
                 }
@@ -189,6 +236,7 @@ class MainActivity : ComponentActivity() {
                         is ReaderSideEffect.ShowToast -> {
                             Toast.makeText(this@MainActivity, effect.message, Toast.LENGTH_SHORT).show()
                         }
+
                         is ReaderSideEffect.SpeedSavedForDocument -> {
                             Toast.makeText(
                                 this@MainActivity,
@@ -196,6 +244,7 @@ class MainActivity : ComponentActivity() {
                                 Toast.LENGTH_SHORT
                             ).show()
                         }
+
                         is ReaderSideEffect.SpeedResetToDefault -> {
                             Toast.makeText(
                                 this@MainActivity,
@@ -203,6 +252,12 @@ class MainActivity : ComponentActivity() {
                                 Toast.LENGTH_SHORT
                             ).show()
                         }
+
+                        is ReaderSideEffect.LaunchRelinkPdfPicker -> {
+                            pendingRelinkDocumentId = effect.documentId
+                            relinkPdfLauncher.launch(arrayOf("application/pdf"))
+                        }
+
                         else -> {}
                     }
                 }
@@ -258,6 +313,21 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        if (hasCompletedInitialResume && currentScreenState.value is AppScreen.Home) {
+            homeViewModel.onIntent(HomeIntent.Refresh)
+        }
+        hasCompletedInitialResume = true
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        if (::appDatabase.isInitialized) {
+            appDatabase.close()
+        }
+    }
+
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
         val screen = currentScreenState.value
@@ -286,16 +356,19 @@ class MainActivity : ComponentActivity() {
                     readerViewModel.onIntent(ReaderIntent.ToggleAutoScroll)
                     true
                 }
+
                 KeyEvent.KEYCODE_PLUS, KeyEvent.KEYCODE_EQUALS -> {
                     val currentSpeed = readerViewModel.viewState.value.currentSpeedPxPerSec
                     readerViewModel.onIntent(ReaderIntent.SetSpeed(currentSpeed + 15f))
                     true
                 }
+
                 KeyEvent.KEYCODE_MINUS -> {
                     val currentSpeed = readerViewModel.viewState.value.currentSpeedPxPerSec
                     readerViewModel.onIntent(ReaderIntent.SetSpeed(currentSpeed - 15f))
                     true
                 }
+
                 else -> super.onKeyDown(keyCode, event)
             }
         }

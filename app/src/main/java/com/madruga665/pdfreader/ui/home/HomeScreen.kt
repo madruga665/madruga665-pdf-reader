@@ -56,6 +56,7 @@ import com.madruga665.pdfreader.ui.components.NeobrutalistIconBox
 import com.madruga665.pdfreader.ui.components.NeobrutalistIconButton
 import com.madruga665.pdfreader.ui.components.NeobrutalistSnackbarHost
 import com.madruga665.pdfreader.ui.components.RecentDocumentCard
+import com.madruga665.pdfreader.ui.components.RelinkConflictDialog
 import com.madruga665.pdfreader.ui.components.RestorePreviewDialog
 import com.madruga665.pdfreader.ui.theme.NeobrutalismMetrics
 import com.madruga665.pdfreader.ui.theme.NeobrutalismTheme
@@ -299,6 +300,21 @@ fun HomeScreen(
                     }
                 )
             }
+
+            viewState.relinkConflict?.let { conflict ->
+                RelinkConflictDialog(
+                    conflict = conflict,
+                    onConsolidate = {
+                        onIntent(HomeIntent.ConfirmConsolidateRelinkConflict)
+                    },
+                    onOpenExisting = {
+                        onIntent(HomeIntent.OpenExistingFromRelinkConflict)
+                    },
+                    onDismiss = {
+                        onIntent(HomeIntent.DismissRelinkConflict)
+                    }
+                )
+            }
         }
     }
 }
@@ -328,7 +344,7 @@ private fun CompactHomeContent(
                     contentPadding = PaddingValues(start = 16.dp, end = 20.dp, bottom = 4.dp),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    items(viewState.recentDocuments, key = { it.uri }) { recent ->
+                    items(viewState.recentDocuments, key = { it.id.ifBlank { it.uri } }) { recent ->
                         RecentDocumentCard(
                             document = recent,
                             onClick = {
@@ -336,6 +352,11 @@ private fun CompactHomeContent(
                             },
                             onRemoveClick = {
                                 onIntent(HomeIntent.RemoveRecent(recent.uri))
+                            },
+                            onRelinkClick = if (!recent.isAvailable && recent.id.isNotBlank()) {
+                                { onIntent(HomeIntent.RequestRelinkPdf(recent.id)) }
+                            } else {
+                                null
                             },
                             modifier = Modifier.width(264.dp)
                         )
@@ -400,7 +421,7 @@ private fun ExpandedHomeContent(
                     contentPadding = PaddingValues(end = 6.dp, bottom = 4.dp),
                     horizontalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    items(viewState.recentDocuments, key = { it.uri }) { recent ->
+                    items(viewState.recentDocuments, key = { it.id.ifBlank { it.uri } }) { recent ->
                         RecentDocumentCard(
                             document = recent,
                             onClick = {
@@ -408,6 +429,11 @@ private fun ExpandedHomeContent(
                             },
                             onRemoveClick = {
                                 onIntent(HomeIntent.RemoveRecent(recent.uri))
+                            },
+                            onRelinkClick = if (!recent.isAvailable && recent.id.isNotBlank()) {
+                                { onIntent(HomeIntent.RequestRelinkPdf(recent.id)) }
+                            } else {
+                                null
                             },
                             modifier = Modifier.width(284.dp)
                         )

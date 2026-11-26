@@ -1,5 +1,7 @@
 package com.madruga665.pdfreader.ui.components
 
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.rememberScrollState
@@ -20,18 +22,20 @@ import com.madruga665.pdfreader.ui.theme.NeobrutalismTheme
 fun ErrorDialog(
     errorState: ReaderErrorState,
     onDismiss: () -> Unit,
-    onRetry: () -> Unit
+    onRetry: () -> Unit,
+    onRelinkPdf: (() -> Unit)? = null
 ) {
     if (errorState is ReaderErrorState.None) return
 
     val (title, description) = when (errorState) {
-        is ReaderErrorState.FileNotFound -> "File Not Found" to errorState.message
+        is ReaderErrorState.FileNotFound -> "Arquivo indisponível" to errorState.message
         is ReaderErrorState.PasswordRequired -> "Password Required" to "This document is password protected."
         is ReaderErrorState.CorruptedDocument -> "Corrupted Document" to "Unable to parse PDF: ${errorState.causeMessage}"
         is ReaderErrorState.OutOfMemory -> "Memory Limit" to errorState.recoverySuggestion
         is ReaderErrorState.None -> return
     }
 
+    val showRelinkAction = errorState is ReaderErrorState.FileNotFound && onRelinkPdf != null
     val colors = NeobrutalismTheme.colors
 
     NeobrutalistDialog(
@@ -47,24 +51,62 @@ fun ErrorDialog(
         },
         title = title,
         actions = {
-            NeobrutalistButton(
-                text = "Dismiss",
-                onClick = onDismiss,
-                containerColor = colors.surface,
-                contentColor = colors.onSurface,
-                borderWidth = NeobrutalismMetrics.BorderWidthCompact,
-                shadowOffset = NeobrutalismMetrics.ShadowOffsetCompact,
-                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp)
-            )
-            NeobrutalistButton(
-                text = "Choose Another File",
-                onClick = onRetry,
-                containerColor = colors.accentYellow,
-                contentColor = colors.onAccent,
-                borderWidth = NeobrutalismMetrics.BorderWidthCompact,
-                shadowOffset = NeobrutalismMetrics.ShadowOffsetCompact,
-                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp)
-            )
+            if (showRelinkAction) {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    NeobrutalistButton(
+                        text = "Restaurar PDF",
+                        onClick = onRelinkPdf,
+                        modifier = Modifier.fillMaxWidth(),
+                        containerColor = colors.accentYellow,
+                        contentColor = colors.onAccent,
+                        borderWidth = NeobrutalismMetrics.BorderWidthCompact,
+                        shadowOffset = NeobrutalismMetrics.ShadowOffsetCompact,
+                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp)
+                    )
+                    NeobrutalistButton(
+                        text = "Escolher outro arquivo",
+                        onClick = onRetry,
+                        modifier = Modifier.fillMaxWidth(),
+                        containerColor = colors.surface,
+                        contentColor = colors.onSurface,
+                        borderWidth = NeobrutalismMetrics.BorderWidthCompact,
+                        shadowOffset = NeobrutalismMetrics.ShadowOffsetCompact,
+                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp)
+                    )
+                    NeobrutalistButton(
+                        text = "Fechar",
+                        onClick = onDismiss,
+                        modifier = Modifier.fillMaxWidth(),
+                        containerColor = colors.background,
+                        contentColor = colors.onSurface,
+                        borderWidth = NeobrutalismMetrics.BorderWidthCompact,
+                        shadowOffset = NeobrutalismMetrics.ShadowOffsetCompact,
+                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp)
+                    )
+                }
+            } else {
+                NeobrutalistButton(
+                    text = "Fechar",
+                    onClick = onDismiss,
+                    containerColor = colors.surface,
+                    contentColor = colors.onSurface,
+                    borderWidth = NeobrutalismMetrics.BorderWidthCompact,
+                    shadowOffset = NeobrutalismMetrics.ShadowOffsetCompact,
+                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp)
+                )
+                NeobrutalistButton(
+                    text = "Escolher outro arquivo",
+                    onClick = onRetry,
+                    containerColor = colors.accentYellow,
+                    contentColor = colors.onAccent,
+                    borderWidth = NeobrutalismMetrics.BorderWidthCompact,
+                    shadowOffset = NeobrutalismMetrics.ShadowOffsetCompact,
+                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp)
+                )
+            }
         }
     ) {
         Text(

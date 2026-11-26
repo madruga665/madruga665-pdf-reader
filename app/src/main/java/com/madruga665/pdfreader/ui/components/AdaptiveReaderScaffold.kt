@@ -322,7 +322,12 @@ fun AdaptiveReaderScaffold(
                         onNavigateBack?.invoke()
                     }
                 },
-                onRetry = onOpenFilePicker
+                onRetry = onOpenFilePicker,
+                onRelinkPdf = if (viewState.unavailableDocumentId != null) {
+                    { onIntent(ReaderIntent.RequestRelinkCurrentDocument) }
+                } else {
+                    null
+                }
             )
         }
     }

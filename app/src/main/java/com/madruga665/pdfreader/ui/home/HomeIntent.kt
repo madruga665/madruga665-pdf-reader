@@ -22,4 +22,10 @@ sealed interface HomeIntent {
     data class SelectRestoreMode(val mode: RestoreMode) : HomeIntent
     data object ConfirmRestore : HomeIntent
     data object DismissRestorePreview : HomeIntent
+
+    data class RequestRelinkPdf(val documentId: String) : HomeIntent
+    data class CompleteRelinkPdf(val documentId: String, val newUri: Uri) : HomeIntent
+    data object ConfirmConsolidateRelinkConflict : HomeIntent
+    data object OpenExistingFromRelinkConflict : HomeIntent
+    data object DismissRelinkConflict : HomeIntent
 }

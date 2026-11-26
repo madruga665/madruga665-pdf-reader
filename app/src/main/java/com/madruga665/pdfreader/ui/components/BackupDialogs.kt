@@ -19,6 +19,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.FindReplace
 import androidx.compose.material.icons.filled.SettingsBackupRestore
 import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material3.HorizontalDivider
@@ -35,6 +36,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.madruga665.pdfreader.core.backup.RestoreMode
 import com.madruga665.pdfreader.ui.home.PendingRestorePreview
+import com.madruga665.pdfreader.ui.home.RelinkConflictState
 import com.madruga665.pdfreader.ui.theme.NeobrutalismMetrics
 import com.madruga665.pdfreader.ui.theme.NeobrutalismTheme
 import com.madruga665.pdfreader.ui.theme.neobrutalistShadow
@@ -82,7 +84,7 @@ fun BackupActionsDialog(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Text(
-                text = "Salve ou restaure localmente suas velocidades por PDF, sessões de leitura, recentes e pastas favoritas em formato JSON.",
+                text = "Salve ou restaure localmente o banco de dados SQLite com suas velocidades por PDF, sessões de leitura, recentes e pastas favoritas.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = colors.subtext
             )
@@ -100,7 +102,7 @@ fun BackupActionsDialog(
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = "Exportar backup (.json)",
+                    text = "Exportar backup (.db)",
                     style = MaterialTheme.typography.labelLarge
                 )
             }
@@ -118,7 +120,7 @@ fun BackupActionsDialog(
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = "Importar backup (.json)",
+                    text = "Importar backup (.db)",
                     style = MaterialTheme.typography.labelLarge
                 )
             }
@@ -177,7 +179,7 @@ fun RestorePreviewDialog(
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Text(
-                text = "Exportado em $formattedDate (app v${preview.summary.appVersion})",
+                text = "Banco SQLite exportado em $formattedDate (app v${preview.summary.appVersion})",
                 style = MaterialTheme.typography.bodySmall,
                 color = colors.subtext
             )
@@ -191,7 +193,7 @@ fun RestorePreviewDialog(
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 SummaryRow("Velocidade padrão global", "${preview.summary.globalDefaultSpeedPxPerSec.toInt()} px/s")
-                SummaryRow("Sessões de leitura", "${preview.summary.sessionsCount}")
+                SummaryRow("PDFs / sessões de leitura", "${preview.summary.sessionsCount}")
                 SummaryRow("Velocidades personalizadas", "${preview.summary.customSpeedsCount}")
                 SummaryRow("Documentos recentes", "${preview.summary.recentsCount}")
                 SummaryRow("Pastas favoritas", "${preview.summary.favoriteFoldersCount}")
@@ -218,12 +220,84 @@ fun RestorePreviewDialog(
 
             RestoreModeOption(
                 title = "Substituir tudo",
-                description = "Sobrescreve todas as configurações, recentes e pastas locais pelos dados do backup.",
+                description = "Substitui todas as configurações, documentos, recentes e pastas locais pelos dados do banco de backup (.db).",
                 selected = preview.selectedMode == RestoreMode.REPLACE,
                 selectedContainerColor = colors.accentRed,
                 onClick = { onModeSelected(RestoreMode.REPLACE) }
             )
         }
+    }
+}
+
+@Composable
+fun RelinkConflictDialog(
+    conflict: RelinkConflictState,
+    onConsolidate: () -> Unit,
+    onOpenExisting: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    val colors = NeobrutalismTheme.colors
+
+    NeobrutalistDialog(
+        onDismissRequest = onDismiss,
+        icon = {
+            NeobrutalistIconBox(
+                icon = Icons.Default.FindReplace,
+                containerColor = colors.accentOrange,
+                boxSize = 40.dp,
+                iconSize = 22.dp,
+                shape = RoundedCornerShape(10.dp)
+            )
+        },
+        title = "Arquivo já cadastrado",
+        actions = {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                NeobrutalistButton(
+                    text = "Consolidar neste registro",
+                    onClick = onConsolidate,
+                    modifier = Modifier.fillMaxWidth(),
+                    containerColor = colors.accentYellow,
+                    contentColor = colors.onAccent,
+                    borderWidth = NeobrutalismMetrics.BorderWidthCompact,
+                    shadowOffset = NeobrutalismMetrics.ShadowOffsetCompact,
+                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp)
+                )
+                NeobrutalistButton(
+                    text = "Abrir registro existente",
+                    onClick = onOpenExisting,
+                    modifier = Modifier.fillMaxWidth(),
+                    containerColor = colors.surface,
+                    contentColor = colors.onSurface,
+                    borderWidth = NeobrutalismMetrics.BorderWidthCompact,
+                    shadowOffset = NeobrutalismMetrics.ShadowOffsetCompact,
+                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp)
+                )
+                NeobrutalistButton(
+                    text = "Cancelar",
+                    onClick = onDismiss,
+                    modifier = Modifier.fillMaxWidth(),
+                    containerColor = colors.background,
+                    contentColor = colors.onSurface,
+                    borderWidth = NeobrutalismMetrics.BorderWidthCompact,
+                    shadowOffset = NeobrutalismMetrics.ShadowOffsetCompact,
+                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp)
+                )
+            }
+        }
+    ) {
+        Text(
+            text = "O arquivo selecionado (${conflict.newFileName}) já está cadastrado como \"${conflict.conflictingRecord.fileName}\". " +
+                "Você pode consolidar neste registro mantendo a identidade e as velocidades salvas de \"${conflict.targetRecord.fileName}\", " +
+                "ou abrir diretamente o registro existente.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = colors.onSurface,
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+        )
     }
 }
 
