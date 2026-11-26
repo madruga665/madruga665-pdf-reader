@@ -98,15 +98,15 @@
 
 ### Tests for User Story 4 (TDD First)
 
-- [ ] T023 [P] [US4] Escrever `SqliteBackupValidatorTest.kt` em `app/src/test/java/com/madruga665/pdfreader/core/backup/` testando arquivo vazio, `.json`, texto comum, bytes corrompidos, schema sem tabelas obrigatórias, `PRAGMA user_version` não suportado e arquivo `.db` válido com contagens exatas (`CA-09`)
-- [ ] T024 [P] [US4] Escrever `SqliteBackupRepositoryTest.kt` e atualizar `BackupMergerTest.kt` / `AndroidSafBackupFileGatewayTest.kt` cobrindo exportação `.db` (`CA-08`), preview, modo `Substituir` (`CA-10`), modo `Mesclar` (`CA-11`), preservação de `datastore_migration_completed = "1"` e rollback em falha de transação (`RNF-02`)
+- [x] T023 [P] [US4] Escrever `SqliteBackupValidatorTest.kt` em `app/src/test/java/com/madruga665/pdfreader/core/backup/` testando arquivo vazio, `.json`, texto comum, bytes corrompidos, schema sem tabelas obrigatórias, `PRAGMA user_version` não suportado e arquivo `.db` válido com contagens exatas (`CA-09`)
+- [x] T024 [P] [US4] Escrever `SqliteBackupRepositoryTest.kt` e atualizar `BackupMergerTest.kt` / `AndroidSafBackupFileGatewayTest.kt` cobrindo exportação `.db` (`CA-08`), preview, modo `Substituir` (`CA-10`), modo `Mesclar` (`CA-11`), preservação de `datastore_migration_completed = "1"` e rollback em falha de transação (`RNF-02`)
 
 ### Implementation for User Story 4
 
-- [ ] T025 [US4] Atualizar `BackupModels.kt`, `BackupFileGateway.kt` e `AndroidSafBackupFileGateway.kt` para streaming binário via arquivos temporários até `20 MB`
-- [ ] T026 [US4] Implementar `SqliteBackupValidator.kt` (validação magic header `"SQLite format 3\u0000"`, `OPEN_READONLY`, `PRAGMA integrity_check`, `PRAGMA user_version`, tabelas/colunas e extração sanitizada)
-- [ ] T027 [US4] Atualizar `BackupMerger.kt` (mesclagem por `id` e `document_uri` sem duplicação) e implementar `SqliteBackupRepository.kt` (exportação segura API 26+ + restauração transacional atômica)
-- [ ] T028 [US4] Atualizar `BackupDialogs.kt`, `HomeViewModel.kt` e `MainActivity.kt` (`CreateDocument("application/octet-stream")`, nome `.db`, `OpenDocument` `.db`, textos 100% SQLite sem nenhuma menção a JSON — `CA-13`)
+- [x] T025 [US4] Atualizar `BackupModels.kt`, `BackupFileGateway.kt` e `AndroidSafBackupFileGateway.kt` para streaming binário via arquivos temporários até `20 MB`
+- [x] T026 [US4] Implementar `SqliteBackupValidator.kt` (validação magic header `"SQLite format 3\u0000"`, `OPEN_READONLY`, `PRAGMA integrity_check`, `PRAGMA user_version`, tabelas/colunas e extração sanitizada)
+- [x] T027 [US4] Atualizar `BackupMerger.kt` (mesclagem por `id` e `document_uri` sem duplicação) e implementar `SqliteBackupRepository.kt` (exportação segura API 26+ + restauração transacional atômica)
+- [x] T028 [US4] Atualizar `BackupDialogs.kt`, `HomeViewModel.kt` e `MainActivity.kt` (`CreateDocument("application/octet-stream")`, nome `.db`, `OpenDocument` `.db`, textos 100% SQLite sem nenhuma menção a JSON — `CA-13`)
 
 **Checkpoint**: Backup `.db` exporta, valida, visualiza prévia e restaura em ambos os modos sem qualquer referência a JSON.
 
@@ -116,8 +116,8 @@
 
 **Goal**: Garantir que documentos restaurados de um backup `.db` com URIs inacessíveis no dispositivo atual apareçam como indisponíveis preservando velocidades/progresso e permitam revinculação imediata via **"Restaurar PDF"** (`RF-12`, `CA-12`).
 
-- [ ] T029 [US5] Adicionar teste em `HomeViewModelTest.kt` e `SqliteBackupRepositoryTest.kt` simulando restauração `.db` com URI inacessível no dispositivo atual -> marcação `isAvailable = false` -> revinculação via "Restaurar PDF" preservando `customDefaultSpeedPxPerSec` e progresso (`CA-12`)
-- [ ] T030 [US5] Validar integração no `HomeViewModel.confirmRestore()` disparando revalidação de disponibilidade imediatamente após restaurar o backup SQLite e atualizando `HomeViewState`
+- [x] T029 [US5] Adicionar teste em `HomeViewModelTest.kt` e `SqliteBackupRepositoryTest.kt` simulando restauração `.db` com URI inacessível no dispositivo atual -> marcação `isAvailable = false` -> revinculação via "Restaurar PDF" preservando `customDefaultSpeedPxPerSec` e progresso (`CA-12`)
+- [x] T030 [US5] Validar integração no `HomeViewModel.confirmRestore()` disparando revalidação de disponibilidade imediatamente após restaurar o backup SQLite e atualizando `HomeViewState`
 
 **Checkpoint**: Fluxo ponta a ponta de backup `.db` + revinculação validado.
 
@@ -125,7 +125,7 @@
 
 ## Phase 8: Polish, Limpeza de Código Legado e Verificação Final
 
-- [ ] T031 [P] Remover arquivos e testes legados substituídos (`BackupJsonCodec.kt`, `BackupJsonCodecTest.kt`, `FilenameSpeedReconciler.kt`, `FilenameSpeedReconcilerTest.kt`, `DataStoreReadingSessionStore*`, `DataStoreRecentsRepository*`, `AndroidFavoriteFoldersRepository*`) e remover dependência `libs.json` de `app/build.gradle.kts` / `gradle/libs.versions.toml` se não houver mais referências
-- [ ] T032 [P] Verificar ausência total da palavra `JSON` em textos voltados ao usuário (`BackupDialogs.kt`, `HomeViewModel.kt`, `SqliteBackupValidator.kt`, `HomeScreen.kt`) e revisar acessibilidade/contraste WCAG em Neo-Brutalism Claro/Escuro (`RNF-06`)
-- [ ] T033 Executar `rg -i "json" app/src/main` e conferir zero menções na UI/backup
-- [ ] T034 Executar `./gradlew testDebugUnitTest` e `./gradlew assembleDebug` com JDK 21 e confirmar 100% de aprovação (`CA-13`, `RNF-05`)
+- [x] T031 [P] Remover arquivos e testes legados substituídos (`BackupJsonCodec.kt`, `BackupJsonCodecTest.kt`, `FilenameSpeedReconciler.kt`, `FilenameSpeedReconcilerTest.kt`, `DataStoreReadingSessionStore*`, `DataStoreRecentsRepository*`, `AndroidFavoriteFoldersRepository*`) e remover dependência `libs.json` de `app/build.gradle.kts` / `gradle/libs.versions.toml` se não houver mais referências
+- [x] T032 [P] Verificar ausência total da palavra `JSON` em textos voltados ao usuário (`BackupDialogs.kt`, `HomeViewModel.kt`, `SqliteBackupValidator.kt`, `HomeScreen.kt`) e revisar acessibilidade/contraste WCAG em Neo-Brutalism Claro/Escuro (`RNF-06`)
+- [x] T033 Executar `rg -i "json" app/src/main` e conferir zero menções na UI/backup
+- [x] T034 Executar `./gradlew testDebugUnitTest` e `./gradlew assembleDebug` com JDK 21 e confirmar 100% de aprovação (`CA-13`, `RNF-05`)

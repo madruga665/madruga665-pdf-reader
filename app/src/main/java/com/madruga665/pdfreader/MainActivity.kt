@@ -21,9 +21,9 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import com.madruga665.pdfreader.core.backup.AndroidSafBackupFileGateway
-import com.madruga665.pdfreader.core.backup.BackupJsonCodec
 import com.madruga665.pdfreader.core.backup.BackupRepository
-import com.madruga665.pdfreader.core.backup.DefaultBackupRepository
+import com.madruga665.pdfreader.core.backup.SqliteBackupRepository
+import com.madruga665.pdfreader.core.backup.SqliteBackupValidator
 import com.madruga665.pdfreader.core.database.SqliteAppDatabase
 import com.madruga665.pdfreader.core.documents.AndroidDocumentAvailabilityChecker
 import com.madruga665.pdfreader.core.documents.DocumentAvailabilityChecker
@@ -136,7 +136,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private val createBackupLauncher = registerForActivityResult(
-        ActivityResultContracts.CreateDocument("application/json")
+        ActivityResultContracts.CreateDocument("application/octet-stream")
     ) { uri: Uri? ->
         uri?.let {
             homeViewModel.onIntent(HomeIntent.ExportBackupToUri(it))
@@ -177,11 +177,12 @@ class MainActivity : ComponentActivity() {
         } catch (_: Exception) {
             "1.0.0"
         }
-        backupRepository = DefaultBackupRepository(
-            sessionStore = documentStore,
-            recentsRepository = recentsRepository,
-            favoriteFoldersRepository = favoriteFoldersRepository,
+        backupRepository = SqliteBackupRepository(
+            database = appDatabase,
+            documentStore = documentStore,
+            validator = SqliteBackupValidator(appDatabase),
             fileGateway = AndroidSafBackupFileGateway(applicationContext),
+            stagingDirectory = cacheDir,
             appVersion = appVersion
         )
 
@@ -277,11 +278,16 @@ class MainActivity : ComponentActivity() {
                                 openFolderLauncher.launch(null)
                             },
                             onExportBackupLauncher = {
-                                createBackupLauncher.launch(BackupJsonCodec.suggestedBackupFileName())
+                                createBackupLauncher.launch(SqliteBackupRepository.suggestedBackupFileName())
                             },
                             onImportBackupLauncher = {
                                 openBackupLauncher.launch(
-                                    arrayOf("application/json", "text/plain", "application/octet-stream", "*/*")
+                                    arrayOf(
+                                        "application/x-sqlite3",
+                                        "application/vnd.sqlite3",
+                                        "application/octet-stream",
+                                        "*/*"
+                                    )
                                 )
                             }
                         )

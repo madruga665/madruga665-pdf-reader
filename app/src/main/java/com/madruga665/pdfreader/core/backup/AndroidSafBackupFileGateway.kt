@@ -5,7 +5,9 @@ import android.net.Uri
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.io.ByteArrayOutputStream
+import java.io.File
+import java.io.FileInputStream
+import java.io.FileOutputStream
 import java.io.IOException
 
 class AndroidSafBackupFileGateway(
@@ -14,37 +16,34 @@ class AndroidSafBackupFileGateway(
 ) : BackupFileGateway {
 
     companion object {
-        const val MAX_BACKUP_BYTES: Int = 5 * 1024 * 1024
+        const val MAX_BACKUP_BYTES: Long = BackupFileGateway.MAX_BACKUP_BYTES
         private const val BUFFER_SIZE: Int = 8192
     }
 
-    override suspend fun writeText(uriString: String, content: String): Result<Unit> =
+    override suspend fun writeFileToUri(uriString: String, sourceFile: File): Result<Unit> =
         withContext(ioDispatcher) {
             try {
+                if (!sourceFile.exists() || sourceFile.length() <= 0L) {
+                    return@withContext Result.failure(IOException("Arquivo temporário de backup indisponível."))
+                }
                 val uri = Uri.parse(uriString)
-                val bytes = content.toByteArray(Charsets.UTF_8)
-                val truncatedStream = try {
+                val outputStream = try {
                     context.contentResolver.openOutputStream(uri, "wt")
                 } catch (_: Exception) {
                     null
-                }
-                if (truncatedStream != null) {
-                    try {
-                        truncatedStream.write(bytes)
-                        truncatedStream.flush()
-                    } finally {
-                        truncatedStream.close()
-                    }
-                    return@withContext Result.success(Unit)
-                }
+                } ?: context.contentResolver.openOutputStream(uri)
+                    ?: return@withContext Result.failure(IOException("Não foi possível abrir o arquivo de destino para escrita."))
 
-                val fallbackStream = context.contentResolver.openOutputStream(uri)
-                    ?: return@withContext Result.failure(IOException("Não foi possível abrir o arquivo para escrita."))
-                try {
-                    fallbackStream.write(bytes)
-                    fallbackStream.flush()
-                } finally {
-                    fallbackStream.close()
+                outputStream.use { out ->
+                    FileInputStream(sourceFile).use { input ->
+                        val buffer = ByteArray(BUFFER_SIZE)
+                        while (true) {
+                            val read = input.read(buffer)
+                            if (read == -1) break
+                            out.write(buffer, 0, read)
+                        }
+                        out.flush()
+                    }
                 }
                 Result.success(Unit)
             } catch (e: Exception) {
@@ -52,33 +51,38 @@ class AndroidSafBackupFileGateway(
             }
         }
 
-    override suspend fun readText(uriString: String): Result<String> =
-        withContext(ioDispatcher) {
-            try {
-                val uri = Uri.parse(uriString)
-                val inputStream = context.contentResolver.openInputStream(uri)
-                    ?: return@withContext Result.failure(IOException("Não foi possível abrir o arquivo selecionado."))
-                try {
-                    val output = ByteArrayOutputStream()
+    override suspend fun copyUriToTempFile(
+        uriString: String,
+        destinationFile: File,
+        maxBytes: Long
+    ): Result<Unit> = withContext(ioDispatcher) {
+        try {
+            val uri = Uri.parse(uriString)
+            val inputStream = context.contentResolver.openInputStream(uri)
+                ?: return@withContext Result.failure(IOException("Não foi possível abrir o arquivo selecionado."))
+
+            destinationFile.parentFile?.mkdirs()
+            inputStream.use { input ->
+                FileOutputStream(destinationFile).use { output ->
                     val buffer = ByteArray(BUFFER_SIZE)
-                    var totalBytes = 0
+                    var totalBytes = 0L
                     while (true) {
-                        val read = inputStream.read(buffer)
+                        val read = input.read(buffer)
                         if (read == -1) break
                         totalBytes += read
-                        if (totalBytes > MAX_BACKUP_BYTES) {
+                        if (totalBytes > maxBytes) {
                             return@withContext Result.failure(
-                                IOException("Arquivo excede o tamanho máximo de backup (5 MB).")
+                                IOException("Arquivo excede o tamanho máximo permitido de backup (20 MB).")
                             )
                         }
                         output.write(buffer, 0, read)
                     }
-                    Result.success(output.toString(Charsets.UTF_8.name()))
-                } finally {
-                    inputStream.close()
+                    output.flush()
                 }
-            } catch (e: Exception) {
-                Result.failure(e)
             }
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
         }
+    }
 }

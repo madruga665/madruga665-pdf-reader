@@ -210,12 +210,12 @@ class HomeViewModelTest {
     fun inspectBackup_invalidFile_setsErrorMessageAndDoesNotOpenPreview() = runTest {
         val backupRepo = mockk<com.madruga665.pdfreader.core.backup.BackupRepository>()
         val uri = mockk<Uri>(relaxed = true)
-        every { uri.toString() } returns "content://backup/invalid.json"
+        every { uri.toString() } returns "content://backup/invalid.db"
 
-        coEvery { backupRepo.previewBackup("content://backup/invalid.json") } returns
+        coEvery { backupRepo.previewBackup("content://backup/invalid.db") } returns
             com.madruga665.pdfreader.core.backup.BackupParseResult.Failure(
-                reason = com.madruga665.pdfreader.core.backup.BackupErrorReason.INVALID_JSON,
-                message = "Arquivo JSON inválido ou corrompido."
+                reason = com.madruga665.pdfreader.core.backup.BackupErrorReason.INVALID_SQLITE_FILE,
+                message = "Arquivo selecionado não é um banco de dados SQLite válido (.db)."
             )
 
         val vm = HomeViewModel(
@@ -228,7 +228,10 @@ class HomeViewModelTest {
         testDispatcher.scheduler.advanceUntilIdle()
 
         assertNull(vm.viewState.value.pendingRestorePreview)
-        assertEquals("Arquivo JSON inválido ou corrompido.", vm.viewState.value.errorMessage)
+        assertEquals(
+            "Arquivo selecionado não é um banco de dados SQLite válido (.db).",
+            vm.viewState.value.errorMessage
+        )
     }
 
     @Test
@@ -594,6 +597,64 @@ class HomeViewModelTest {
             assertNull(vm.viewState.value.relinkConflict)
             val effect = awaitItem()
             assertTrue(effect is HomeSideEffect.NavigateToReader)
+        }
+    }
+
+    @Test
+    fun confirmRestore_revalidatesRestoredDocumentsAndSupportsRelinkPreservingCustomSpeed() = runTest {
+        val backupRepo = mockk<com.madruga665.pdfreader.core.backup.BackupRepository>()
+        val documentStore = mockk<com.madruga665.pdfreader.core.storage.PdfDocumentStore>(relaxed = true)
+        val availabilityChecker = mockk<com.madruga665.pdfreader.core.documents.DocumentAvailabilityChecker>(relaxed = true)
+
+        val restoredDoc = com.madruga665.pdfreader.core.model.PdfDocumentRecord.createSanitized(
+            id = "restored-uuid-1",
+            documentUri = "content://other_device/book.pdf",
+            fileName = "book.pdf",
+            pageCount = 15,
+            currentPageIndex = 6,
+            customDefaultSpeedPxPerSec = 175.0f,
+            isAvailable = true
+        )
+        val payload = com.madruga665.pdfreader.core.backup.BackupPayload(
+            exportedAt = 1764100000000L,
+            appVersion = "1.0.0",
+            globalDefaultSpeedPxPerSec = 120f,
+            documents = listOf(restoredDoc)
+        )
+        val backupUri = mockk<Uri>(relaxed = true)
+        every { backupUri.toString() } returns "content://backup/device_a.db"
+
+        coEvery { backupRepo.previewBackup("content://backup/device_a.db") } returns
+            com.madruga665.pdfreader.core.backup.BackupParseResult.Success(payload, payload.toSummary())
+        coEvery {
+            backupRepo.restoreBackup(payload, com.madruga665.pdfreader.core.backup.RestoreMode.MERGE)
+        } returns Result.success(
+            com.madruga665.pdfreader.core.backup.BackupRestoreResult(
+                mode = com.madruga665.pdfreader.core.backup.RestoreMode.MERGE,
+                summary = payload.toSummary()
+            )
+        )
+        coEvery { documentStore.getAllDocumentsSnapshot() } returns listOf(restoredDoc)
+        coEvery { availabilityChecker.isReadable("content://other_device/book.pdf") } returns false
+
+        val vm = HomeViewModel(
+            recentsRepository = recentsRepository,
+            favoriteFoldersRepository = favoriteFoldersRepository,
+            backupRepository = backupRepo,
+            documentStore = documentStore,
+            availabilityChecker = availabilityChecker
+        )
+
+        vm.onIntent(HomeIntent.InspectBackupUri(backupUri))
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        vm.onIntent(HomeIntent.ConfirmRestore)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        coVerify(exactly = 1) {
+            documentStore.updateAvailabilityBatch(
+                match { it["content://other_device/book.pdf"] == false }
+            )
         }
     }
 }
