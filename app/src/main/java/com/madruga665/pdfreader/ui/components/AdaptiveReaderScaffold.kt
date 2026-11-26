@@ -225,8 +225,11 @@ fun AdaptiveReaderScaffold(
                                 repository = repository,
                                 autoScrollEngine = autoScrollEngine,
                                 isAutoScrolling = viewState.isAutoScrolling,
+                                initialPageIndex = viewState.currentPageIndex,
+                                initialZoomScale = viewState.zoomScale,
                                 onPageChanged = { onIntent(ReaderIntent.PageChanged(it)) },
                                 onScrollProgressChanged = { onIntent(ReaderIntent.ScrollProgressChanged(it)) },
+                                onZoomScaleChanged = { onIntent(ReaderIntent.SetZoomScale(it)) },
                                 onTap = { onIntent(ReaderIntent.ToggleOverlayVisibility) },
                                 onEndOfDocument = { onIntent(ReaderIntent.EndOfDocumentReached) },
                                 modifier = Modifier.fillMaxSize()
@@ -245,8 +248,11 @@ fun AdaptiveReaderScaffold(
                             repository = repository,
                             autoScrollEngine = autoScrollEngine,
                             isAutoScrolling = viewState.isAutoScrolling,
+                            initialPageIndex = viewState.currentPageIndex,
+                            initialZoomScale = viewState.zoomScale,
                             onPageChanged = { onIntent(ReaderIntent.PageChanged(it)) },
                             onScrollProgressChanged = { onIntent(ReaderIntent.ScrollProgressChanged(it)) },
+                            onZoomScaleChanged = { onIntent(ReaderIntent.SetZoomScale(it)) },
                             onTap = { onIntent(ReaderIntent.ToggleOverlayVisibility) },
                             onEndOfDocument = { onIntent(ReaderIntent.EndOfDocumentReached) }
                         )

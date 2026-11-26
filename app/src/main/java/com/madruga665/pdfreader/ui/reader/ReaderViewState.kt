@@ -6,6 +6,8 @@ import com.madruga665.pdfreader.core.model.SpeedPreset
 
 data class ReaderViewState(
     val isLoading: Boolean = false,
+    val activeDocumentId: String? = null,
+    val unavailableDocumentId: String? = null,
     val document: PdfDocument? = null,
     val currentPageIndex: Int = 0,
     val totalPages: Int = 0,

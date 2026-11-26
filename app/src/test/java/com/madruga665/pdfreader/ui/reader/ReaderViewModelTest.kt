@@ -5,9 +5,12 @@ import app.cash.turbine.test
 import com.madruga665.pdfreader.core.engine.DefaultAutoScrollEngine
 import com.madruga665.pdfreader.core.home.RecentsRepository
 import com.madruga665.pdfreader.core.model.PdfDocument
+import com.madruga665.pdfreader.core.model.PdfDocumentRecord
+import com.madruga665.pdfreader.core.model.ReaderErrorState
 import com.madruga665.pdfreader.core.model.ReadingSession
 import com.madruga665.pdfreader.core.model.SpeedPreset
 import com.madruga665.pdfreader.core.repository.PdfDocumentRepository
+import com.madruga665.pdfreader.core.storage.PdfDocumentStore
 import com.madruga665.pdfreader.core.storage.ReadingSessionStore
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -28,6 +31,7 @@ import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import java.io.FileNotFoundException
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class ReaderViewModelTest {
@@ -64,7 +68,8 @@ class ReaderViewModelTest {
 
     @Test
     fun openDocument_success_updatesViewState() = runTest {
-        val uri = mockk<Uri>()
+        val uri = mockk<Uri>(relaxed = true)
+        every { uri.toString() } returns "content://docs/sample.pdf"
         val doc = PdfDocument(
             uri = uri,
             fileName = "sample.pdf",
@@ -81,6 +86,135 @@ class ReaderViewModelTest {
         assertFalse(state.isLoading)
         assertEquals(doc, state.document)
         assertEquals(10, state.totalPages)
+    }
+
+    @Test
+    fun openDocument_withPdfDocumentStore_registersStableIdAndPersistsProgressById() = runTest {
+        val pdfStore = mockk<PdfDocumentStore>(relaxed = true)
+        val uriString = "content://docs/manual.pdf"
+        val uri = mockk<Uri>(relaxed = true)
+        every { uri.toString() } returns uriString
+        every { uri.lastPathSegment } returns "manual.pdf"
+        val doc = PdfDocument(
+            uri = uri,
+            fileName = "manual.pdf",
+            pageCount = 12,
+            fileSizeBytes = 2048,
+            pageAspectRatios = List(12) { 0.75f }
+        )
+        val storedRecord = PdfDocumentRecord.createSanitized(
+            id = "uuid-manual-1",
+            documentUri = uriString,
+            fileName = "manual.pdf",
+            pageCount = 12,
+            currentPageIndex = 4,
+            normalizedScrollRatio = 0.35f,
+            zoomScale = 1.6f,
+            preferredSpeedPxPerSec = 130.0f,
+            customDefaultSpeedPxPerSec = 160.0f,
+            lastAccessedAt = 5000L
+        )
+        coEvery { repository.openDocument(uri) } returns Result.success(doc)
+        coEvery { pdfStore.registerOrOpenDocument(uriString, "manual.pdf", 12, any()) } returns storedRecord
+        coEvery { pdfStore.getGlobalDefaultSpeed() } returns flowOf(90.0f)
+
+        val vm = ReaderViewModel(
+            repository = repository,
+            sessionStore = pdfStore,
+            autoScrollEngine = autoScrollEngine
+        )
+
+        vm.onIntent(ReaderIntent.OpenDocument(uri))
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        val state = vm.viewState.value
+        assertEquals("uuid-manual-1", state.activeDocumentId)
+        assertEquals(4, state.currentPageIndex)
+        assertEquals(0.35f, state.scrollProgressRatio, 0.001f)
+        assertEquals(1.6f, state.zoomScale, 0.001f)
+        assertEquals(160.0f, state.currentSpeedPxPerSec, 0.001f)
+        assertEquals(160.0f, state.documentSavedSpeedPxPerSec ?: 0f, 0.001f)
+
+        vm.onIntent(ReaderIntent.PageChanged(6))
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        coVerify(atLeast = 1) {
+            pdfStore.updateReadingProgress(
+                documentId = "uuid-manual-1",
+                currentPageIndex = 6,
+                normalizedScrollRatio = any(),
+                zoomScale = 1.6f,
+                preferredSpeedPxPerSec = 160.0f,
+                nowMillis = any()
+            )
+        }
+    }
+
+    @Test
+    fun openDocument_doesNotReconcileCustomSpeedImplicitlyByFileName() = runTest {
+        val newUriString = "content://new_device/doc_42.pdf"
+        val uri = mockk<Uri>(relaxed = true)
+        every { uri.toString() } returns newUriString
+        every { uri.lastPathSegment } returns "livro-estudo.pdf"
+        val doc = PdfDocument(
+            uri = uri,
+            fileName = "livro-estudo.pdf",
+            pageCount = 12,
+            fileSizeBytes = 2048,
+            pageAspectRatios = List(12) { 0.75f }
+        )
+        coEvery { repository.openDocument(uri) } returns Result.success(doc)
+        coEvery { sessionStore.getSession(newUriString) } returns flowOf(null)
+        coEvery { sessionStore.getCustomDocumentSpeed(newUriString) } returns flowOf(null)
+        coEvery { sessionStore.findCustomSpeedByFileName("livro-estudo.pdf") } returns 185.0f
+
+        viewModel.onIntent(ReaderIntent.OpenDocument(uri))
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        val state = viewModel.viewState.value
+        assertEquals(90.0f, state.currentSpeedPxPerSec, 0.001f)
+        assertNull(state.documentSavedSpeedPxPerSec)
+        coVerify(exactly = 0) { sessionStore.findCustomSpeedByFileName(any()) }
+        coVerify(exactly = 0) { sessionStore.saveCustomDocumentSpeed(newUriString, any()) }
+    }
+
+    @Test
+    fun openDocument_fileNotFoundOnRegisteredDocument_marksUnavailableAndExposesRelinkId() = runTest {
+        val pdfStore = mockk<PdfDocumentStore>(relaxed = true)
+        val uriString = "content://docs/moved.pdf"
+        val uri = mockk<Uri>(relaxed = true)
+        every { uri.toString() } returns uriString
+        val existing = PdfDocumentRecord.createSanitized(
+            id = "uuid-moved-1",
+            documentUri = uriString,
+            fileName = "moved.pdf",
+            pageCount = 8,
+            customDefaultSpeedPxPerSec = 170.0f,
+            lastAccessedAt = 1000L
+        )
+        coEvery { repository.openDocument(uri) } returns Result.failure(FileNotFoundException("Missing"))
+        coEvery { pdfStore.getByUri(uriString) } returns existing
+
+        val vm = ReaderViewModel(
+            repository = repository,
+            sessionStore = pdfStore,
+            autoScrollEngine = autoScrollEngine
+        )
+
+        vm.onIntent(ReaderIntent.OpenDocument(uri))
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertTrue(vm.viewState.value.error is ReaderErrorState.FileNotFound)
+        assertEquals("uuid-moved-1", vm.viewState.value.unavailableDocumentId)
+        coVerify(exactly = 1) { pdfStore.setDocumentAvailability(uriString, false) }
+
+        vm.sideEffects.test {
+            vm.onIntent(ReaderIntent.RequestRelinkCurrentDocument)
+            testDispatcher.scheduler.advanceUntilIdle()
+            val effect = awaitItem()
+            assertTrue(effect is ReaderSideEffect.LaunchRelinkPdfPicker)
+            assertEquals("uuid-moved-1", (effect as ReaderSideEffect.LaunchRelinkPdfPicker).documentId)
+        }
     }
 
     @Test
@@ -123,7 +257,8 @@ class ReaderViewModelTest {
 
     @Test
     fun endOfDocumentReached_haltsAutoScrollAndSendsSideEffect() = runTest {
-        val uri = mockk<Uri>()
+        val uri = mockk<Uri>(relaxed = true)
+        every { uri.toString() } returns "content://docs/book.pdf"
         val doc = PdfDocument(
             uri = uri,
             fileName = "book.pdf",
@@ -149,9 +284,11 @@ class ReaderViewModelTest {
 
     @Test
     fun orientationChange_restoresNormalizedScrollPosition() = runTest {
-        val uri = mockk<Uri>()
+        val uriString = "content://docs/sample.pdf"
+        val uri = mockk<Uri>(relaxed = true)
+        every { uri.toString() } returns uriString
         val savedSession = ReadingSession(
-            documentUri = uri.toString(),
+            documentUri = uriString,
             currentPageIndex = 3,
             normalizedScrollRatio = 0.6f,
             zoomScale = 1.5f,
@@ -165,7 +302,7 @@ class ReaderViewModelTest {
             pageAspectRatios = List(10) { 0.75f }
         )
         coEvery { repository.openDocument(uri) } returns Result.success(doc)
-        coEvery { sessionStore.getSession(uri.toString()) } returns flowOf(savedSession)
+        coEvery { sessionStore.getSession(uriString) } returns flowOf(savedSession)
 
         viewModel.onIntent(ReaderIntent.OpenDocument(uri))
         testDispatcher.scheduler.advanceUntilIdle()
@@ -292,81 +429,31 @@ class ReaderViewModelTest {
     }
 
     @Test
-    fun openDocument_reconcilesCustomSpeedByFileNameWhenExactUriHasNone() = runTest {
-        val newUriString = "content://new_device/doc_42.pdf"
-        val uri = mockk<Uri>(relaxed = true)
-        every { uri.toString() } returns newUriString
-        every { uri.lastPathSegment } returns "livro-estudo.pdf"
-        val doc = PdfDocument(
-            uri = uri,
-            fileName = "livro-estudo.pdf",
-            pageCount = 12,
-            fileSizeBytes = 2048,
-            pageAspectRatios = List(12) { 0.75f }
-        )
-        coEvery { repository.openDocument(uri) } returns Result.success(doc)
-        coEvery { sessionStore.getSession(newUriString) } returns flowOf(null)
-        coEvery { sessionStore.getCustomDocumentSpeed(newUriString) } returns flowOf(null)
-        coEvery { sessionStore.findCustomSpeedByFileName("livro-estudo.pdf") } returns 185.0f
-
-        viewModel.onIntent(ReaderIntent.OpenDocument(uri))
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        val state = viewModel.viewState.value
-        assertEquals(185.0f, state.currentSpeedPxPerSec, 0.001f)
-        assertEquals(185.0f, state.documentSavedSpeedPxPerSec ?: 0f, 0.001f)
-        coVerify(exactly = 1) { sessionStore.saveCustomDocumentSpeed(newUriString, 185.0f) }
-        coVerify(exactly = 1) { sessionStore.saveDocumentFileName(newUriString, "livro-estudo.pdf") }
-    }
-
-    @Test
-    fun openDocument_exactUriCustomSpeedTakesPrecedenceOverFileNameReconciliation() = runTest {
-        val uriString = "content://test/exact.pdf"
-        val uri = mockk<Uri>(relaxed = true)
-        every { uri.toString() } returns uriString
-        every { uri.lastPathSegment } returns "exact.pdf"
-        val doc = PdfDocument(
-            uri = uri,
-            fileName = "exact.pdf",
-            pageCount = 5,
-            fileSizeBytes = 1000,
-            pageAspectRatios = List(5) { 0.75f }
-        )
-        coEvery { repository.openDocument(uri) } returns Result.success(doc)
-        coEvery { sessionStore.getCustomDocumentSpeed(uriString) } returns flowOf(155.0f)
-        coEvery { sessionStore.findCustomSpeedByFileName("exact.pdf") } returns 240.0f
-
-        viewModel.onIntent(ReaderIntent.OpenDocument(uri))
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        assertEquals(155.0f, viewModel.viewState.value.currentSpeedPxPerSec, 0.001f)
-        coVerify(exactly = 0) { sessionStore.findCustomSpeedByFileName(any()) }
-    }
-
-    @Test
     fun openDocument_securityException_mapsGracefullyToFileNotFoundError() = runTest {
         val uri = mockk<Uri>(relaxed = true)
+        every { uri.toString() } returns "content://docs/sec.pdf"
         coEvery { repository.openDocument(uri) } returns Result.failure(SecurityException("Permission Denial"))
 
         viewModel.onIntent(ReaderIntent.OpenDocument(uri))
         testDispatcher.scheduler.advanceUntilIdle()
 
-        assertTrue(viewModel.viewState.value.error is com.madruga665.pdfreader.core.model.ReaderErrorState.FileNotFound)
+        assertTrue(viewModel.viewState.value.error is ReaderErrorState.FileNotFound)
     }
 
     @Test
     fun dismissError_clearsErrorStateAfterSecurityException() = runTest {
         val uri = mockk<Uri>(relaxed = true)
+        every { uri.toString() } returns "content://docs/sec.pdf"
         coEvery { repository.openDocument(uri) } returns Result.failure(SecurityException("Permission Denial"))
 
         viewModel.onIntent(ReaderIntent.OpenDocument(uri))
         testDispatcher.scheduler.advanceUntilIdle()
-        assertTrue(viewModel.viewState.value.error is com.madruga665.pdfreader.core.model.ReaderErrorState.FileNotFound)
+        assertTrue(viewModel.viewState.value.error is ReaderErrorState.FileNotFound)
 
         viewModel.onIntent(ReaderIntent.DismissError)
         testDispatcher.scheduler.advanceUntilIdle()
 
-        assertEquals(com.madruga665.pdfreader.core.model.ReaderErrorState.None, viewModel.viewState.value.error)
+        assertEquals(ReaderErrorState.None, viewModel.viewState.value.error)
     }
 
     @Test

@@ -19,4 +19,6 @@ sealed interface ReaderIntent {
     data object SaveCurrentSpeedAsDocumentDefault : ReaderIntent
     data object ResetDocumentSpeedToDefault : ReaderIntent
     data object DismissError : ReaderIntent
+    data object RequestRelinkCurrentDocument : ReaderIntent
+    data class CompleteRelinkCurrentDocument(val newUri: Uri) : ReaderIntent
 }

@@ -9,4 +9,8 @@ interface RecentsRepository {
     suspend fun removeRecentDocument(uri: String)
     suspend fun clearAllRecents()
     suspend fun replaceAllRecents(documents: List<RecentDocument>) {}
+    suspend fun updateAvailability(uri: String, isAvailable: Boolean) {}
+    suspend fun updateAvailabilityBatch(updates: Map<String, Boolean>) {}
+    suspend fun getById(id: String): RecentDocument? = null
+    suspend fun getByUri(uri: String): RecentDocument? = null
 }

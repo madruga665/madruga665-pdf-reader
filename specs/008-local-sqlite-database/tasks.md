@@ -34,16 +34,16 @@
 
 ### Tests for User Story 1 (TDD First)
 
-- [ ] T007 [P] [US1] Escrever `SqlitePdfDocumentStoreTest.kt` em `app/src/test/java/com/madruga665/pdfreader/core/storage/` cobrindo criação com UUID único, reabertura sem duplicação (`CA-01`), clamping `RN-02`, preservação de `custom_default_speed_px_per_sec` ao atualizar progresso (`CA-02`), reset para padrão global e `app_settings`
-- [ ] T008 [P] [US1] Escrever `SqliteRecentsRepositoryTest.kt` e `SqliteFavoriteFoldersRepositoryTest.kt` em `app/src/test/java/com/madruga665/pdfreader/core/home/`
-- [ ] T009 [P] [US1] Atualizar `ReaderViewModelTest.kt` para verificar persistência via `documentId`, restauração de página/zoom/velocidade e ausência de reconciliação implícita por nome de arquivo (`RN-01`)
+- [x] T007 [P] [US1] Escrever `SqlitePdfDocumentStoreTest.kt` em `app/src/test/java/com/madruga665/pdfreader/core/storage/` cobrindo criação com UUID único, reabertura sem duplicação (`CA-01`), clamping `RN-02`, preservação de `custom_default_speed_px_per_sec` ao atualizar progresso (`CA-02`), reset para padrão global e `app_settings`
+- [x] T008 [P] [US1] Escrever `SqliteRecentsRepositoryTest.kt` e `SqliteFavoriteFoldersRepositoryTest.kt` em `app/src/test/java/com/madruga665/pdfreader/core/home/`
+- [x] T009 [P] [US1] Atualizar `ReaderViewModelTest.kt` para verificar persistência via `documentId`, restauração de página/zoom/velocidade e ausência de reconciliação implícita por nome de arquivo (`RN-01`)
 
 ### Implementation for User Story 1
 
-- [ ] T010 [US1] Implementar `SqlitePdfDocumentStore.kt` em `app/src/main/java/com/madruga665/pdfreader/core/storage/` estendendo `ReadingSessionStore`
-- [ ] T011 [P] [US1] Implementar `SqliteRecentsRepository.kt` e `SqliteFavoriteFoldersRepository.kt` em `app/src/main/java/com/madruga665/pdfreader/core/home/`
-- [ ] T012 [US1] Atualizar `ReaderViewModel.kt`, `ReaderViewState.kt` e `ReaderIntent.kt` para operar com `activeDocumentId` estável e remover chamada a `FilenameSpeedReconciler`
-- [ ] T013 [US1] Corrigir `PdfDocumentViewport.kt` e `AdaptiveReaderScaffold.kt` para inicializar `LazyListState` na página restaurada (`currentPageIndex`) e `zoomScale` da sessão sem sobrescrever com página `0` na montagem (`CA-02`)
+- [x] T010 [US1] Implementar `SqlitePdfDocumentStore.kt` em `app/src/main/java/com/madruga665/pdfreader/core/storage/` estendendo `ReadingSessionStore`
+- [x] T011 [P] [US1] Implementar `SqliteRecentsRepository.kt` e `SqliteFavoriteFoldersRepository.kt` em `app/src/main/java/com/madruga665/pdfreader/core/home/`
+- [x] T012 [US1] Atualizar `ReaderViewModel.kt`, `ReaderViewState.kt` e `ReaderIntent.kt` para operar com `activeDocumentId` estável e remover chamada a `FilenameSpeedReconciler`
+- [x] T013 [US1] Corrigir `PdfDocumentViewport.kt` e `AdaptiveReaderScaffold.kt` para inicializar `LazyListState` na página restaurada (`currentPageIndex`) e `zoomScale` da sessão sem sobrescrever com página `0` na montagem (`CA-02`)
 
 **Checkpoint**: Cadastro único por PDF, persistência contínua de página/zoom/velocidade, recentes e pastas favoritas 100% funcionais no SQLite.
 
@@ -57,11 +57,11 @@
 
 ### Tests for User Story 2 (TDD First)
 
-- [ ] T014 [US2] Escrever `LegacyDataStoreMigratorTest.kt` em `app/src/test/java/com/madruga665/pdfreader/core/storage/` cobrindo migração completa dos 3 DataStores, atribuição de UUID único, tolerância a JSON legado parcial/corrompido e idempotência em execuções repetidas (`CA-03`, `RN-08`)
+- [x] T014 [US2] Escrever `LegacyDataStoreMigratorTest.kt` em `app/src/test/java/com/madruga665/pdfreader/core/storage/` cobrindo migração completa dos 3 DataStores, atribuição de UUID único, tolerância a JSON legado parcial/corrompido e idempotência em execuções repetidas (`CA-03`, `RN-08`)
 
 ### Implementation for User Story 2
 
-- [ ] T015 [US2] Implementar `LegacyDataStoreReader.kt` (lendo somente as chaves legadas dos 3 DataStores) e `LegacyDataStoreMigrator.kt` em `app/src/main/java/com/madruga665/pdfreader/core/storage/` executando em transação única e gravando `datastore_migration_completed = "1"`
+- [x] T015 [US2] Implementar `LegacyDataStoreReader.kt` (lendo somente as chaves legadas dos 3 DataStores) e `LegacyDataStoreMigrator.kt` em `app/src/main/java/com/madruga665/pdfreader/core/storage/` executando em transação única e gravando `datastore_migration_completed = "1"`
 - [ ] T016 [US2] Integrar execução da migração única na inicialização em `MainActivity.kt` antes de expor fluxos de leitura às telas
 
 **Checkpoint**: Dados legados migrados automaticamente e sem duplicação entre reinicializações.
